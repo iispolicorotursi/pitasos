@@ -92,10 +92,10 @@
         margin-bottom: 0;
       }
 
-      .table thead th {
+      /*.table thead th {
         background-color: #343a40;
         color: white;
-      }
+      }*/
 
       /* Messaggio di avviso/informazione */
       .alert {
@@ -190,7 +190,7 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        // Riferimenti agli elementi del DOM
+        // --- Riferimenti DOM ---
         const teacherListContainer = document.getElementById(
           "teacher-list-container"
         );
@@ -201,21 +201,18 @@
         );
         const resultsContainer = document.getElementById("results-container");
 
-        // Imposta la data corrente come valore predefinito
+        // --- Imposta data corrente ---
         const today = new Date();
         const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, "0"); // I mesi sono 0-indicizzati
+        const month = String(today.getMonth() + 1).padStart(2, "0");
         const day = String(today.getDate()).padStart(2, "0");
         dateInput.value = `${year}-${month}-${day}`;
 
-        // Percorso del file CSV
+        // --- CSV ---
         const csvFilePath = "orario.csv";
-
-        // Variabili per memorizzare i dati
         let scheduleData = [];
         let uniqueTeachers = [];
 
-        // Mappa per convertire il giorno della settimana da numero a stringa
         const dayOfWeekMap = {
           0: "Domenica",
           1: "Lunedì",
@@ -226,22 +223,15 @@
           6: "Sabato",
         };
 
-        /**
-         * Funzione asincrona per caricare e processare il file CSV usando fetch e JS nativo
-         */
+        // --- Carica e processa il CSV ---
         async function loadAndProcessCSV() {
           try {
             const response = await fetch(csvFilePath);
-            if (!response.ok) {
+            if (!response.ok)
               throw new Error(`Errore HTTP: ${response.status}`);
-            }
+
             const csvText = await response.text();
-
             const lines = csvText.trim().split("\n");
-            if (lines.length < 2) {
-              throw new Error("Il file CSV è vuoto o contiene solo l'header.");
-            }
-
             const headers = lines[0].split(",").map((h) => h.trim());
 
             scheduleData = lines
@@ -260,7 +250,11 @@
               .filter(Boolean);
             uniqueTeachers = [...new Set(teacherNames)].sort();
 
-            populateTeacherList();
+            // Quando la data cambia → aggiorna la lista docenti
+            dateInput.addEventListener("change", () => {
+              const selectedDate = dateInput.value;
+              populateTeacherListForDate(selectedDate);
+            });
 
             // Mostra o nasconde il pulsante di reset in base alla selezione dei docenti
             teacherListContainer.addEventListener("change", () => {
@@ -278,40 +272,86 @@
               teacherListContainer
                 .querySelectorAll("input:checked")
                 .forEach((cb) => (cb.checked = false));
+
               // Reimposta la data odierna
               const today = new Date();
               const year = today.getFullYear();
               const month = String(today.getMonth() + 1).padStart(2, "0");
               const day = String(today.getDate()).padStart(2, "0");
               dateInput.value = `${year}-${month}-${day}`;
+
               // Nascondi il pulsante
               resetSelectionBtn.style.display = "none";
+
+              // Ripopola la lista dei docenti per la data corrente
+              populateTeacherListForDate(dateInput.value);
+
+              // 🔁 Ripristina lo stato iniziale dei risultati
+              resultsContainer.innerHTML = `
+    <div class="alert alert-info text-center mb-0">
+      I docenti disponibili per la sostituzione verranno mostrati qui.
+    </div>
+  `;
             });
+
+            // 🔹 Popola subito la lista usando la data corrente
+            populateTeacherListForDate(dateInput.value);
           } catch (error) {
-            console.error("Errore nel caricamento o parsing del CSV:", error);
+            console.error("Errore nel caricamento CSV:", error);
             teacherListContainer.innerHTML = `<div class="alert alert-danger">Errore nel caricamento del file CSV: ${error.message}</div>`;
           }
         }
 
-        /**
-         * Popola la lista dei docenti con checkbox
-         */
-        function populateTeacherList() {
+        // --- Popola la lista dei docenti in base alla data selezionata ---
+        function populateTeacherListForDate(selectedDate) {
           teacherListContainer.innerHTML = "";
-          uniqueTeachers.forEach((teacher, index) => {
+
+          if (!selectedDate) {
+            teacherListContainer.innerHTML = `<div class="alert alert-warning text-center mb-0">Seleziona prima una data.</div>`;
+            return;
+          }
+
+          const dateObj = new Date(selectedDate);
+          const dayOfWeek = dayOfWeekMap[dateObj.getUTCDay()];
+
+          // Trova i docenti presenti in orario quel giorno
+          const teachersThatDay = scheduleData
+            .filter((row) => row.Giorno === dayOfWeek)
+            .map((row) => row.Docente.trim());
+
+          // Rimuove chi ha solo ore POT (nessuna lezione regolare)
+          const teachersWithRegularLessons = [
+            ...new Set(teachersThatDay),
+          ].filter((teacher) => {
+            const lessons = scheduleData.filter(
+              (row) =>
+                row.Docente.trim() === teacher && row.Giorno === dayOfWeek
+            );
+            const hasRegular = lessons.some((l) => l.Classe.trim() !== "POT");
+            return hasRegular;
+          });
+
+          // Se nessuno disponibile
+          if (teachersWithRegularLessons.length === 0) {
+            teacherListContainer.innerHTML = `<div class="alert alert-secondary text-center mb-0">
+          Nessun docente con lezioni regolari per ${dayOfWeek}.
+        </div>`;
+            return;
+          }
+
+          // Popola checkbox
+          teachersWithRegularLessons.sort().forEach((teacher, index) => {
             const div = document.createElement("div");
             div.className = "form-check";
             div.innerHTML = `
-                        <input class="form-check-input" type="checkbox" value="${teacher}" id="teacher-${index}">
-                        <label class="form-check-label" for="teacher-${index}">${teacher}</label>
-                    `;
+          <input class="form-check-input" type="checkbox" value="${teacher}" id="teacher-${index}">
+          <label class="form-check-label" for="teacher-${index}">${teacher}</label>
+        `;
             teacherListContainer.appendChild(div);
           });
         }
 
-        /**
-         * Funzione per filtrare i dati e mostrare i risultati
-         */
+        // --- Trova e mostra sostituti ---
         function findAndDisplaySubstitutes() {
           const absentTeachers = Array.from(
             teacherListContainer.querySelectorAll("input:checked")
@@ -326,25 +366,23 @@
           const dateObj = new Date(selectedDate);
           const dayOfWeek = dayOfWeekMap[dateObj.getUTCDay()];
 
-          // Trova tutti i docenti con ore POT nel giorno selezionato
           const potSlots = scheduleData.filter(
             (row) => row.Giorno === dayOfWeek && row.Classe.trim() === "POT"
           );
 
           const resultsData = [];
 
-          // Per ogni docente assente, costruisci il suo orario e trova i sostituti
           absentTeachers.forEach((absent) => {
             const absentSchedule = scheduleData
               .filter(
-                (row) => row.Docente === absent && row.Giorno === dayOfWeek
+                (row) =>
+                  row.Docente === absent &&
+                  row.Giorno === dayOfWeek &&
+                  row.Classe.trim().toUpperCase() !== "POT" // ⛔ esclude le ore POT dell’assente
               )
               .sort((a, b) => a.OraInizio.localeCompare(b.OraInizio));
 
-            const teacherResult = {
-              absentTeacher: absent,
-              schedule: [],
-            };
+            const teacherResult = { absentTeacher: absent, schedule: [] };
 
             absentSchedule.forEach((lesson) => {
               const availableSubstitutes = potSlots
@@ -370,14 +408,7 @@
           displayResults(resultsData, dayOfWeek);
         }
 
-        /**
-         * Mostra i risultati in una serie di tabelle, una per ogni docente assente
-         * @param {Array} data - I dati strutturati per la visualizzazione
-         * @param {string} day - Il giorno della settimana selezionato
-         */
-        /**
-         * Mostra i risultati con checkbox per i sostituti
-         */
+        // --- Mostra risultati con riepilogo e PDF ---
         function displayResults(data, day) {
           resultsContainer.innerHTML = "";
 
@@ -385,7 +416,9 @@
             (teacher) => teacher.schedule.length > 0
           );
           if (!hasAnySchedule) {
-            resultsContainer.innerHTML = `<div class="alert alert-secondary text-center" role="alert">I docenti assenti selezionati non hanno ore di lezione previste per <strong>${day}</strong>.</div>`;
+            resultsContainer.innerHTML = `<div class="alert alert-secondary text-center" role="alert">
+          I docenti assenti selezionati non hanno ore di lezione previste per <strong>${day}</strong>.
+        </div>`;
             return;
           }
 
@@ -394,40 +427,45 @@
           title.innerHTML = `Proposte di Sostituzione per <strong>${day}</strong>`;
           resultsContainer.appendChild(title);
 
-          // Contenitore riepilogo
           const summaryContainer = document.createElement("div");
           summaryContainer.className = "mt-4";
           summaryContainer.innerHTML = `
-        <h5 class="fw-bold mb-2">Riepilogo Sostituzioni Selezionate</h5>
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle" id="summary-table">
-                <thead class="bg-primary text-white">
-                    <tr>
-                        <th>Docente Assente</th>
-                        <th>Classe</th>
-                        <th>Orario</th>
-                        <th>Sostituto</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-        <div class="text-center mt-3">
-            <button id="reset-btn" class="btn btn-outline-danger" style="display:none;">
-                <i class="bi bi-trash3"></i> Resetta tutto
-            </button>
-            <button id="download-pdf-btn" class="btn btn-outline-primary ms-2" style="display:none;">
-                <i class="bi bi-file-earmark-pdf"></i> Esporta PDF
-            </button>
-        </div>
-    `;
+  <h5 class="fw-bold mb-2">Riepilogo Sostituzioni Selezionate</h5>
+  <div class="card mb-4">
+    <div class="card-header bg-success text-white fw-bold">
+      Riepilogo Sostituzioni
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle mb-0" id="summary-table">
+          <thead class="bg-success text-white">
+            <tr>
+              <th style="width:25%;">Docente Assente</th>
+              <th style="width:25%;">Classe</th>
+              <th style="width:25%;">Orario</th>
+              <th style="width:25%;">Sostituto</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="text-center mt-3">
+    <button id="reset-btn" class="btn btn-outline-danger" style="display:none;">
+      <i class="bi bi-trash3"></i> Resetta tutto
+    </button>
+    <button id="download-pdf-btn" class="btn btn-outline-primary ms-2" style="display:none;">
+      <i class="bi bi-file-earmark-pdf"></i> Esporta PDF
+    </button>
+  </div>
+`;
           resultsContainer.appendChild(summaryContainer);
 
           const summaryBody = summaryContainer.querySelector("tbody");
           const resetBtn = summaryContainer.querySelector("#reset-btn");
           const downloadBtn =
             summaryContainer.querySelector("#download-pdf-btn");
-          const pngBtn = summaryContainer.querySelector("#download-png-btn");
 
           data.forEach((teacherData) => {
             if (teacherData.schedule.length === 0) return;
@@ -436,7 +474,7 @@
             card.className = "card mb-4";
 
             const cardHeader = document.createElement("div");
-            cardHeader.className = "card-header bg-light fw-bold";
+            cardHeader.className = "card-header bg-primary text-white fw-bold";
             cardHeader.textContent = `Docente Assente: ${teacherData.absentTeacher}`;
             card.appendChild(cardHeader);
 
@@ -446,12 +484,13 @@
             const table = document.createElement("table");
             table.className = "table table-striped table-hover align-middle";
             const thead = document.createElement("thead");
+            thead.className = "bg-primary text-white";
             thead.innerHTML = `
-            <tr>
-                <th style="width:25%;">Orario Assenza</th>
-                <th style="width:25%;">Classe</th>
-                <th>Sostituti Disponibili (POT)</th>
-            </tr>
+          <tr>
+            <th style="width:25%;">Orario Assenza</th>
+            <th style="width:25%;">Classe</th>
+            <th>Sostituti Disponibili (POT)</th>
+          </tr>
         `;
             table.appendChild(thead);
 
@@ -459,33 +498,31 @@
 
             teacherData.schedule.forEach((lesson) => {
               const row = document.createElement("tr");
-
-              // Crea i checkbox per i sostituti
               const substitutesHTML =
                 lesson.substitutes.length > 0
                   ? lesson.substitutes
                       .map(
                         (sub) => `
-                    <div class="form-check form-check-inline sub-option" 
-                         data-sub="${sub}" data-hour="${lesson.hour}">
-                        <input class="form-check-input sub-check"
-                               type="checkbox"
-                               value="${sub}"
-                               data-hour="${lesson.hour}"
-                               data-absent="${teacherData.absentTeacher}"
-                               data-class="${lesson.class}">
-                        <label class="form-check-label">${sub}</label>
-                    </div>
-                `
+                      <div class="form-check form-check-inline sub-option" 
+                          data-sub="${sub}" data-hour="${lesson.hour}">
+                          <input class="form-check-input sub-check"
+                              type="checkbox"
+                              value="${sub}"
+                              data-hour="${lesson.hour}"
+                              data-absent="${teacherData.absentTeacher}"
+                              data-class="${lesson.class}">
+                          <label class="form-check-label">${sub}</label>
+                      </div>
+                  `
                       )
                       .join("")
                   : '<span class="text-muted fst-italic">Nessuno disponibile</span>';
 
               row.innerHTML = `
-                <td><strong>${lesson.hour}</strong></td>
-                <td>${lesson.class}</td>
-                <td>${substitutesHTML}</td>
-            `;
+            <td><strong>${lesson.hour}</strong></td>
+            <td>${lesson.class}</td>
+            <td>${substitutesHTML}</td>
+          `;
 
               tbody.appendChild(row);
             });
@@ -496,10 +533,8 @@
             resultsContainer.insertBefore(card, summaryContainer);
           });
 
-          // Gestione selezioni
           resultsContainer.addEventListener("change", (event) => {
             if (!event.target.classList.contains("sub-check")) return;
-
             const checkbox = event.target;
             const sub = checkbox.value;
             const hour = checkbox.dataset.hour;
@@ -508,19 +543,17 @@
             const key = `${hour}_${sub}`;
 
             if (checkbox.checked) {
-              // Aggiungi al riepilogo
               const row = document.createElement("tr");
               row.dataset.key = key;
               row.innerHTML = `
-                <td>${absent}</td>
-                <td>${classe}</td>
-                <td>${hour}</td>
-                <td>${sub}</td>
-            `;
+            <td>${absent}</td>
+            <td>${classe}</td>
+            <td>${hour}</td>
+            <td>${sub}</td>
+          `;
               summaryBody.appendChild(row);
               updateButtonVisibility();
 
-              // Nascondi il docente dalle altre proposte per lo stesso orario
               document
                 .querySelectorAll(
                   `.sub-option[data-hour="${hour}"][data-sub="${sub}"]`
@@ -529,13 +562,11 @@
                   if (!opt.contains(checkbox)) opt.style.display = "none";
                 });
             } else {
-              // Rimuovi dal riepilogo se deselezionato
               const existingRow = summaryBody.querySelector(
                 `tr[data-key="${key}"]`
               );
               if (existingRow) existingRow.remove();
 
-              // Riappare come opzione disponibile per la stessa ora
               document
                 .querySelectorAll(
                   `.sub-option[data-hour="${hour}"][data-sub="${sub}"]`
@@ -548,14 +579,12 @@
             }
           });
 
-          // Gestione pulsanti dinamica
           const updateButtonVisibility = () => {
             const hasRows = summaryBody.children.length > 0;
             resetBtn.style.display = hasRows ? "inline-block" : "none";
             downloadBtn.style.display = hasRows ? "inline-block" : "none";
           };
 
-          // 🔁 Pulsante "Resetta tutto"
           resetBtn.addEventListener("click", () => {
             document
               .querySelectorAll(".sub-check")
@@ -567,7 +596,6 @@
             updateButtonVisibility();
           });
 
-          // 📄 Esporta in PDF
           downloadBtn.addEventListener("click", () => {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -592,13 +620,8 @@
                 fillColor: [13, 110, 253],
                 textColor: [255, 255, 255],
               },
-              styles: {
-                fontSize: 10,
-              },
-              margin: {
-                left: 10,
-                right: 10,
-              },
+              styles: { fontSize: 10 },
+              margin: { left: 10, right: 10 },
             });
 
             const filename = `riepilogo_sostituzioni_${selectedDate}.pdf`;
