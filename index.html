@@ -610,18 +610,55 @@
             });
 
             doc.setFontSize(14);
+            doc.setTextColor(33, 37, 41); // testo come Bootstrap
             doc.text(`Riepilogo sostituzioni - ${dataFormattata}`, 14, 15);
 
+            // Estrarre i dati dalla tabella HTML
+            const headers = Array.from(
+              document.querySelectorAll("#summary-table thead th")
+            ).map((th) => th.innerText);
+
+            const rows = Array.from(
+              document.querySelectorAll("#summary-table tbody tr")
+            ).map((tr) =>
+              Array.from(tr.querySelectorAll("td")).map((td) => td.innerText)
+            );
+
+            // Colori coerenti con Bootstrap
+            const borderColor = [222, 226, 230]; // grigio chiaro Bootstrap
+            const headerBg = [25, 135, 84]; // bg-success
+            const headerText = [255, 255, 255]; // bianco
+            const stripeBg = [248, 249, 250]; // righe alternate (table-striped)
+
+            // Tabella
             doc.autoTable({
-              html: "#summary-table",
+              head: [headers],
+              body: rows,
               startY: 25,
-              theme: "grid",
-              headStyles: {
-                fillColor: [13, 110, 253],
-                textColor: [255, 255, 255],
+              theme: "plain",
+              styles: {
+                fontSize: 10,
+                cellPadding: 3,
+                textColor: [33, 37, 41],
+                lineColor: borderColor,
+                lineWidth: 0.2,
+                halign: "center",
+                valign: "middle",
               },
-              styles: { fontSize: 10 },
-              margin: { left: 10, right: 10 },
+              headStyles: {
+                fillColor: headerBg,
+                textColor: headerText,
+                lineColor: borderColor,
+                lineWidth: 0.2,
+                fontStyle: "bold",
+                halign: "center",
+              },
+              alternateRowStyles: {
+                fillColor: stripeBg,
+              },
+              tableLineColor: borderColor,
+              tableLineWidth: 0.2,
+              margin: { top: 25, left: 10, right: 10 },
             });
 
             const filename = `riepilogo_sostituzioni_${selectedDate}.pdf`;
