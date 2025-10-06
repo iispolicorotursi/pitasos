@@ -309,7 +309,8 @@
               .filter(pot =>
                 pot.OraInizio === lesson.OraInizio &&
                 pot.Classe.trim() === 'POT' &&
-                !absentTeachers.includes(pot.Docente.trim())
+                !absentTeachers.includes(pot.Docente.trim()) &&
+                pot.Docente.trim().toUpperCase() !== 'COLLETTA O.'
               )
               .map(pot => pot.Docente.trim());
 
