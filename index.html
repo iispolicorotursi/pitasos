@@ -145,6 +145,10 @@
         <button id="filter-btn" class="btn btn-primary w-100 btn-lg">
           <i class="bi bi-person-check me-2"></i>Trova Sostituti
         </button>
+        <button id="reset-selection-btn" class="btn btn-outline-secondary w-100 mt-2" style="display:none;">
+          <i class="bi bi-arrow-counterclockwise me-2"></i>Resetta selezioni
+        </button>
+
       </div>
     </div>
 
@@ -167,6 +171,7 @@
       const teacherListContainer = document.getElementById('teacher-list-container');
       const dateInput = document.getElementById('date-input');
       const filterBtn = document.getElementById('filter-btn');
+      const resetSelectionBtn = document.getElementById('reset-selection-btn');
       const resultsContainer = document.getElementById('results-container');
 
       // Imposta la data corrente come valore predefinito
@@ -224,6 +229,26 @@
           uniqueTeachers = [...new Set(teacherNames)].sort();
 
           populateTeacherList();
+
+          // Mostra o nasconde il pulsante di reset in base alla selezione dei docenti
+          teacherListContainer.addEventListener('change', () => {
+              const hasChecked = teacherListContainer.querySelectorAll('input:checked').length > 0;
+              resetSelectionBtn.style.display = hasChecked ? 'inline-block' : 'none';
+          });
+
+          // Gestione pulsante "Resetta selezioni"
+          resetSelectionBtn.addEventListener('click', () => {
+              // Deseleziona tutti i docenti
+              teacherListContainer.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
+              // Reimposta la data odierna
+              const today = new Date();
+              const year = today.getFullYear();
+              const month = String(today.getMonth() + 1).padStart(2, '0');
+              const day = String(today.getDate()).padStart(2, '0');
+              dateInput.value = `${year}-${month}-${day}`;
+              // Nascondi il pulsante
+              resetSelectionBtn.style.display = 'none';
+          });
 
         } catch (error) {
           console.error("Errore nel caricamento o parsing del CSV:", error);
