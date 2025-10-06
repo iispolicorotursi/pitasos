@@ -121,6 +121,10 @@
           /* opzionale: riduce anche il padding interno per più compattezza */
         }
       }
+
+      .form-check-inline .form-check-input[type="radio"] {
+        margin-top: 0.2rem;
+      }
     </style>
   </head>
 
@@ -385,20 +389,41 @@
             const teacherResult = { absentTeacher: absent, schedule: [] };
 
             absentSchedule.forEach((lesson) => {
-              const availableSubstitutes = potSlots
-                .filter(
-                  (pot) =>
-                    pot.OraInizio === lesson.OraInizio &&
-                    pot.Classe.trim() === "POT" &&
-                    !absentTeachers.includes(pot.Docente.trim()) &&
-                    pot.Docente.trim().toUpperCase() !== "COLLETTA O."
-                )
-                .map((pot) => pot.Docente.trim());
+              // Verifica se c'è compresenza
+              const inCompresenza = scheduleData.some(
+                (row) =>
+                  row.Giorno === dayOfWeek &&
+                  row.Classe.trim() === lesson.Classe.trim() &&
+                  row.OraInizio === lesson.OraInizio &&
+                  row.OraFine === lesson.OraFine &&
+                  row.Docente.trim() !== absent // un altro docente è presente contemporaneamente
+              );
+
+              let substitutesInfo = [];
+
+              if (inCompresenza) {
+                // Se è in compresenza, nessuna sostituzione necessaria
+                substitutesInfo = ["In compresenza"];
+              } else {
+                // Altrimenti cerca i docenti in potenzialmente disponibili (POT)
+                substitutesInfo = potSlots
+                  .filter(
+                    (pot) =>
+                      pot.OraInizio === lesson.OraInizio &&
+                      pot.Classe.trim() === "POT" &&
+                      !absentTeachers.includes(pot.Docente.trim()) &&
+                      pot.Docente.trim().toUpperCase() !== "COLLETTA O."
+                  )
+                  .map((pot) => pot.Docente.trim());
+
+                if (substitutesInfo.length === 0)
+                  substitutesInfo = ["Nessuno disponibile"];
+              }
 
               teacherResult.schedule.push({
                 hour: `${lesson.OraInizio} - ${lesson.OraFine}`,
                 class: lesson.Classe,
-                substitutes: availableSubstitutes,
+                substitutes: substitutesInfo,
               });
             });
 
@@ -409,6 +434,7 @@
         }
 
         // --- Mostra risultati con riepilogo e PDF ---
+        // --- Mostra risultati con riepilogo e PDF ---
         function displayResults(data, day) {
           resultsContainer.innerHTML = "";
 
@@ -417,8 +443,8 @@
           );
           if (!hasAnySchedule) {
             resultsContainer.innerHTML = `<div class="alert alert-secondary text-center" role="alert">
-          I docenti assenti selezionati non hanno ore di lezione previste per <strong>${day}</strong>.
-        </div>`;
+      I docenti assenti selezionati non hanno ore di lezione previste per <strong>${day}</strong>.
+    </div>`;
             return;
           }
 
@@ -430,36 +456,36 @@
           const summaryContainer = document.createElement("div");
           summaryContainer.className = "mt-4";
           summaryContainer.innerHTML = `
-  <h5 class="fw-bold mb-2">Riepilogo Sostituzioni Selezionate</h5>
-  <div class="card mb-4">
-    <div class="card-header bg-success text-white fw-bold">
-      Riepilogo Sostituzioni
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-striped table-hover align-middle mb-0" id="summary-table">
-          <thead class="bg-success text-white">
-            <tr>
-              <th style="width:25%;">Docente Assente</th>
-              <th style="width:25%;">Classe</th>
-              <th style="width:25%;">Orario</th>
-              <th style="width:25%;">Sostituto</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+    <h5 class="fw-bold mb-2">Riepilogo Sostituzioni Selezionate</h5>
+    <div class="card mb-4">
+      <div class="card-header bg-success text-white fw-bold">
+        Riepilogo Sostituzioni
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle mb-0" id="summary-table">
+            <thead class="bg-success text-white">
+              <tr>
+                <th>Docente Assente</th>
+                <th>Classe</th>
+                <th>Orario</th>
+                <th>Sostituto</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="text-center mt-3">
-    <button id="reset-btn" class="btn btn-outline-danger" style="display:none;">
-      <i class="bi bi-trash3"></i> Resetta tutto
-    </button>
-    <button id="download-pdf-btn" class="btn btn-outline-primary ms-2" style="display:none;">
-      <i class="bi bi-file-earmark-pdf"></i> Esporta PDF
-    </button>
-  </div>
-`;
+    <div class="text-center mt-3">
+      <button id="reset-btn" class="btn btn-outline-danger" style="display:none;">
+        <i class="bi bi-trash3"></i> Resetta tutto
+      </button>
+      <button id="download-pdf-btn" class="btn btn-outline-primary ms-2" style="display:none;">
+        <i class="bi bi-file-earmark-pdf"></i> Esporta PDF
+      </button>
+    </div>
+  `;
           resultsContainer.appendChild(summaryContainer);
 
           const summaryBody = summaryContainer.querySelector("tbody");
@@ -467,6 +493,25 @@
           const downloadBtn =
             summaryContainer.querySelector("#download-pdf-btn");
 
+          // 🔹 Funzione per ordinare il riepilogo per ora
+          function sortSummaryTable() {
+            const rows = Array.from(summaryBody.querySelectorAll("tr"));
+            rows.sort((a, b) => {
+              const timeA = a.dataset.hour?.split(" - ")[0] || "";
+              const timeB = b.dataset.hour?.split(" - ")[0] || "";
+              return timeA.localeCompare(timeB);
+            });
+            summaryBody.innerHTML = "";
+            rows.forEach((row) => summaryBody.appendChild(row));
+          }
+
+          const updateButtonVisibility = () => {
+            const hasRows = summaryBody.children.length > 0;
+            resetBtn.style.display = hasRows ? "inline-block" : "none";
+            downloadBtn.style.display = hasRows ? "inline-block" : "none";
+          };
+
+          // 🔹 Crea tabelle docenti assenti
           data.forEach((teacherData) => {
             if (teacherData.schedule.length === 0) return;
 
@@ -486,44 +531,72 @@
             const thead = document.createElement("thead");
             thead.className = "bg-primary text-white";
             thead.innerHTML = `
-          <tr>
-            <th style="width:25%;">Orario Assenza</th>
-            <th style="width:25%;">Classe</th>
-            <th>Sostituti Disponibili (POT)</th>
-          </tr>
-        `;
+      <tr>
+    <th style="width:17%;">Orario Assenza</th>
+    <th style="width:17%;">Classe</th>
+    <th style="width:50%;">Sostituti Disponibili (POT)</th>
+      </tr>
+    `;
             table.appendChild(thead);
 
             const tbody = document.createElement("tbody");
 
             teacherData.schedule.forEach((lesson) => {
               const row = document.createElement("tr");
-              const substitutesHTML =
-                lesson.substitutes.length > 0
-                  ? lesson.substitutes
-                      .map(
-                        (sub) => `
-                      <div class="form-check form-check-inline sub-option" 
-                          data-sub="${sub}" data-hour="${lesson.hour}">
-                          <input class="form-check-input sub-check"
-                              type="checkbox"
-                              value="${sub}"
-                              data-hour="${lesson.hour}"
-                              data-absent="${teacherData.absentTeacher}"
-                              data-class="${lesson.class}">
-                          <label class="form-check-label">${sub}</label>
-                      </div>
-                  `
-                      )
-                      .join("")
-                  : '<span class="text-muted fst-italic">Nessuno disponibile</span>';
+              let substitutesHTML = "";
+
+              if (
+                lesson.substitutes.length === 1 &&
+                lesson.substitutes[0] === "In compresenza"
+              ) {
+                substitutesHTML =
+                  '<span class="fst-italic text-secondary">In compresenza</span>';
+
+                const summaryRow = document.createElement("tr");
+                summaryRow.dataset.key = `${lesson.hour}_comp_${teacherData.absentTeacher}`;
+                summaryRow.dataset.hour = lesson.hour;
+                summaryRow.innerHTML = `
+          <td>${teacherData.absentTeacher}</td>
+          <td>${lesson.class}</td>
+          <td>${lesson.hour}</td>
+          <td><em>In compresenza</em></td>
+        `;
+                summaryBody.appendChild(summaryRow);
+                sortSummaryTable();
+                updateButtonVisibility();
+              } else if (
+                lesson.substitutes.length === 1 &&
+                lesson.substitutes[0] === "Nessuno disponibile"
+              ) {
+                substitutesHTML =
+                  '<span class="text-muted fst-italic">Nessuno disponibile</span>';
+              } else {
+                substitutesHTML = lesson.substitutes
+                  .map(
+                    (sub) => `
+              <div class="form-check form-check-inline sub-option" 
+                   data-sub="${sub}" data-hour="${lesson.hour}">
+                <input class="form-check-input sub-check"
+                       type="radio"
+                       name="sub-${
+                         teacherData.absentTeacher
+                       }-${lesson.hour.replace(/\s|:/g, "")}"
+                       value="${sub}"
+                       data-hour="${lesson.hour}"
+                       data-absent="${teacherData.absentTeacher}"
+                       data-class="${lesson.class}">
+                <label class="form-check-label">${sub}</label>
+              </div>
+            `
+                  )
+                  .join("");
+              }
 
               row.innerHTML = `
-            <td><strong>${lesson.hour}</strong></td>
-            <td>${lesson.class}</td>
-            <td>${substitutesHTML}</td>
-          `;
-
+        <td><strong>${lesson.hour}</strong></td>
+        <td>${lesson.class}</td>
+        <td>${substitutesHTML}</td>
+      `;
               tbody.appendChild(row);
             });
 
@@ -533,58 +606,70 @@
             resultsContainer.insertBefore(card, summaryContainer);
           });
 
+          // --- Gestione selezioni radio ---
           resultsContainer.addEventListener("change", (event) => {
             if (!event.target.classList.contains("sub-check")) return;
-            const checkbox = event.target;
-            const sub = checkbox.value;
-            const hour = checkbox.dataset.hour;
-            const absent = checkbox.dataset.absent;
-            const classe = checkbox.dataset.class;
-            const key = `${hour}_${sub}`;
 
-            if (checkbox.checked) {
-              const row = document.createElement("tr");
-              row.dataset.key = key;
-              row.innerHTML = `
-            <td>${absent}</td>
-            <td>${classe}</td>
-            <td>${hour}</td>
-            <td>${sub}</td>
-          `;
-              summaryBody.appendChild(row);
-              updateButtonVisibility();
+            const radio = event.target;
+            const sub = radio.value;
+            const hour = radio.dataset.hour;
+            const absent = radio.dataset.absent;
+            const classe = radio.dataset.class;
 
-              document
-                .querySelectorAll(
-                  `.sub-option[data-hour="${hour}"][data-sub="${sub}"]`
-                )
-                .forEach((opt) => {
-                  if (!opt.contains(checkbox)) opt.style.display = "none";
+            // 🔹 Rimuove eventuale riga precedente per lo stesso docente/ora
+            const existingRow = summaryBody.querySelector(
+              `tr[data-absent="${absent}"][data-hour="${hour}"]`
+            );
+            if (existingRow) existingRow.remove();
+
+            // 🔹 Aggiunge la nuova riga
+            const row = document.createElement("tr");
+            row.dataset.absent = absent;
+            row.dataset.hour = hour;
+            row.innerHTML = `
+      <td>${absent}</td>
+      <td>${classe}</td>
+      <td>${hour}</td>
+      <td>${sub}</td>
+    `;
+            summaryBody.appendChild(row);
+            sortSummaryTable();
+
+            // 🔹 Nasconde il docente scelto in altri gruppi nella stessa ora
+            document
+              .querySelectorAll(
+                `.sub-option[data-hour="${hour}"][data-sub="${sub}"]`
+              )
+              .forEach((opt) => {
+                const input = opt.querySelector(".sub-check");
+                if (!input.checked) opt.style.display = "none";
+              });
+
+            // 🔹 Mostra nuovamente opzioni corrette al cambio di radio
+            const groupName = radio.getAttribute("name");
+            document
+              .querySelectorAll(`input[name="${groupName}"]`)
+              .forEach((input) => {
+                input.addEventListener("change", () => {
+                  document
+                    .querySelectorAll(`.sub-option[data-hour="${hour}"]`)
+                    .forEach((opt) => (opt.style.display = "inline-block"));
+
+                  document
+                    .querySelectorAll(
+                      `.sub-option[data-hour="${hour}"][data-sub="${input.value}"]`
+                    )
+                    .forEach((opt) => {
+                      const el = opt.querySelector(".sub-check");
+                      if (!el.checked) opt.style.display = "none";
+                    });
                 });
-            } else {
-              const existingRow = summaryBody.querySelector(
-                `tr[data-key="${key}"]`
-              );
-              if (existingRow) existingRow.remove();
+              });
 
-              document
-                .querySelectorAll(
-                  `.sub-option[data-hour="${hour}"][data-sub="${sub}"]`
-                )
-                .forEach((opt) => {
-                  opt.style.display = "inline-block";
-                });
-
-              updateButtonVisibility();
-            }
+            updateButtonVisibility();
           });
 
-          const updateButtonVisibility = () => {
-            const hasRows = summaryBody.children.length > 0;
-            resetBtn.style.display = hasRows ? "inline-block" : "none";
-            downloadBtn.style.display = hasRows ? "inline-block" : "none";
-          };
-
+          // --- Reset ---
           resetBtn.addEventListener("click", () => {
             document
               .querySelectorAll(".sub-check")
@@ -594,8 +679,14 @@
               .forEach((opt) => (opt.style.display = "inline-block"));
             summaryBody.innerHTML = "";
             updateButtonVisibility();
+            resultsContainer.innerHTML = `
+      <div class="alert alert-info text-center mb-0">
+        I docenti disponibili per la sostituzione verranno mostrati qui.
+      </div>
+    `;
           });
 
+          // --- PDF ---
           downloadBtn.addEventListener("click", () => {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -610,10 +701,9 @@
             });
 
             doc.setFontSize(14);
-            doc.setTextColor(33, 37, 41); // testo come Bootstrap
-            doc.text(`Riepilogo sostituzioni - ${dataFormattata}`, 14, 15);
+            doc.setTextColor(33, 37, 41);
+            doc.text(`Sostituzioni del giorno ${dataFormattata}`, 14, 15);
 
-            // Estrarre i dati dalla tabella HTML
             const headers = Array.from(
               document.querySelectorAll("#summary-table thead th")
             ).map((th) => th.innerText);
@@ -624,13 +714,11 @@
               Array.from(tr.querySelectorAll("td")).map((td) => td.innerText)
             );
 
-            // Colori coerenti con Bootstrap
-            const borderColor = [222, 226, 230]; // grigio chiaro Bootstrap
-            const headerBg = [25, 135, 84]; // bg-success
-            const headerText = [255, 255, 255]; // bianco
-            const stripeBg = [248, 249, 250]; // righe alternate (table-striped)
+            const borderColor = [222, 226, 230];
+            const headerBg = [25, 135, 84];
+            const headerText = [255, 255, 255];
+            const stripeBg = [248, 249, 250];
 
-            // Tabella
             doc.autoTable({
               head: [headers],
               body: rows,
@@ -653,9 +741,17 @@
                 fontStyle: "bold",
                 halign: "center",
               },
-              alternateRowStyles: {
-                fillColor: stripeBg,
+              didParseCell: function (data) {
+                if (
+                  data.cell.text &&
+                  data.cell.text.length > 0 &&
+                  data.cell.text[0].includes("In compresenza")
+                ) {
+                  data.cell.styles.fontStyle = "italic";
+                  data.cell.styles.textColor = [108, 117, 125];
+                }
               },
+              alternateRowStyles: { fillColor: stripeBg },
               tableLineColor: borderColor,
               tableLineWidth: 0.2,
               margin: { top: 25, left: 10, right: 10 },
