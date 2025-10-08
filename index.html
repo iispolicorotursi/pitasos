@@ -605,11 +605,14 @@
             const assenze = parseCSVText(assenzeCSV);
             const permessi = parseCSVText(permessiCSV);
 
+            // 🔹 Assenze giornaliere (identico)
             const assenzeGiornaliere = assenze.map((nome) => {
-              const cleanName = nome.replace(/^"|"$/g, "").trim();
+              const cleanName = String(nome || "")
+                .replace(/^"|"$/g, "")
+                .trim();
               const lezioni = scheduleData.filter(
                 (r) =>
-                  r.Docente === cleanName &&
+                  (r.Docente || "").trim() === cleanName &&
                   normalizzaGiorno(r.Giorno) === normalizzaGiorno(giornoEsteso)
               );
               const dettagli = lezioni.map((l) => ({
@@ -620,25 +623,34 @@
               return { nome: cleanName, dettagli };
             });
 
-            const assenzeOrarie = permessi.flatMap((linea) => {
-              const parts = linea.split(",");
-              const cleanName = parts[0].replace(/^"|"$/g, "").trim();
-              const oraAssenza = parts[1] ? parts[1].trim() : "";
-              const lezioni = scheduleData.filter(
-                (r) =>
-                  r.Docente === cleanName &&
-                  normalizzaGiorno(r.Giorno) ===
-                    normalizzaGiorno(giornoEsteso) &&
-                  `${r.OraInizio}-${r.OraFine}` === oraAssenza
-              );
-              return lezioni.length
-                ? lezioni.map((l) => ({
-                    nome: cleanName,
-                    ora: oraAssenza,
-                    classe: l.Classe,
-                  }))
-                : [{ nome: cleanName, ora: oraAssenza || "-", classe: "-" }];
-            });
+            // 🔹 Assenze orarie (CSV con campi multipli)
+            const assenzeOrarie = permessi
+              .map((riga) => {
+                // Rimuove eventuali \r, apici e spazi
+                const cleanLine = String(riga || "")
+                  .trim()
+                  .replace(/\r/g, "");
+                const match = cleanLine.match(/^"?(.*?)"?\s*,\s*"?(.+?)"?$/);
+
+                if (!match) return null;
+
+                const docente = match[1].trim();
+                const oreRaw = match[2].trim();
+
+                // Separa più ore
+                const oreArray = oreRaw
+                  .split(",")
+                  .map((o) => o.replace(/"/g, "").trim())
+                  .filter(Boolean);
+
+                // Restituisce più oggetti, uno per ogni ora
+                return oreArray.map((oraSingola) => ({
+                  nome: docente,
+                  ora: oraSingola,
+                }));
+              })
+              .filter(Boolean)
+              .flat();
 
             displayTables(
               assenzeGiornaliere,
@@ -648,7 +660,10 @@
             );
           } catch (error) {
             console.error(error);
-            resultsContainer.innerHTML = `<div class="alert alert-danger text-center">Errore nella lettura dei file CSV: ${error.message}</div>`;
+            resultsContainer.innerHTML = `
+    <div class="alert alert-danger text-center">
+      Errore nella lettura dei file CSV: ${error.message}
+    </div>`;
           }
         });
       });
