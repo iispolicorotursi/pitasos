@@ -171,6 +171,48 @@
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "");
 
+        // --- Funzione per verificare la compresenza (senza variabili globali)
+        function isCompresenza(
+          classe,
+          oraInizio,
+          oraFine,
+          docente,
+          giornoEsteso, // ⬅️ nuovo parametro
+          assenzeGiornaliere = [],
+          assenzeOrarie = []
+        ) {
+          if (!Array.isArray(scheduleData)) return false;
+
+          const compresenti = scheduleData.filter(
+            (r) =>
+              normalizzaGiorno(r.Giorno || "") ===
+                normalizzaGiorno(giornoEsteso) &&
+              r.Classe?.trim() === classe?.trim() &&
+              r.OraInizio === oraInizio &&
+              r.OraFine === oraFine &&
+              r.Docente?.trim() !== docente?.trim()
+          );
+
+          if (compresenti.length === 0) return false;
+
+          const assG = Array.isArray(assenzeGiornaliere)
+            ? assenzeGiornaliere
+            : [];
+          const assO = Array.isArray(assenzeOrarie) ? assenzeOrarie : [];
+
+          const tuttiAssenti = compresenti.every((c) => {
+            const nome = c.Docente?.trim() || "";
+            return (
+              assG.some((a) => a.nome === nome) ||
+              assO.some(
+                (a) => a.nome === nome && a.ora === `${oraInizio}-${oraFine}`
+              )
+            );
+          });
+
+          return !tuttiAssenti; // true = c'è davvero compresenza
+        }
+        // --- Mostra risultati ---
         // --- Mostra risultati ---
         function displayTables(
           assenzeGiornaliere,
@@ -197,334 +239,182 @@
             .filter((d) => d.toUpperCase() !== "COLLETTA O.")
             .sort();
 
-          console.log("📋 Docenti POT trovati:", potDocenti);
+          const summaryRows = [];
 
-          // Funzione per verificare compresenza
-          function isCompresenza(
-            classe,
-            oraInizio,
-            oraFine,
-            docente,
-            assenzeGiornaliere = [],
-            assenzeOrarie = []
-          ) {
-            // Se manca scheduleData o giornoEsteso, esci subito
-            if (!Array.isArray(scheduleData) || !giornoEsteso) return false;
-
-            // Normalizza i dati e trova eventuali compresenti
-            const compresenti = scheduleData.filter(
-              (r) =>
-                r &&
-                normalizzaGiorno(r.Giorno || "") ===
-                  normalizzaGiorno(giornoEsteso) &&
-                r.Classe?.trim() === classe?.trim() &&
-                r.OraInizio === oraInizio &&
-                r.OraFine === oraFine &&
-                r.Docente?.trim() !== docente?.trim()
-            );
-
-            if (compresenti.length === 0) return false; // nessuna compresenza trovata
-
-            // Assicurati che le liste di assenze siano sempre array
-            const assenzeG = Array.isArray(assenzeGiornaliere)
-              ? assenzeGiornaliere
-              : [];
-            const assenzeO = Array.isArray(assenzeOrarie) ? assenzeOrarie : [];
-
-            // Controlla se tutti i compresenti sono assenti (giornalmente o orariamente)
-            const tuttiAssenti = compresenti.every((c) => {
-              const nome = c.Docente?.trim() || "";
-              return (
-                assenzeG.some((a) => a.nome === nome) ||
-                assenzeO.some(
-                  (a) => a.nome === nome && a.ora === `${oraInizio}-${oraFine}`
-                )
-              );
-            });
-
-            // true solo se almeno uno dei compresenti è presente → quindi effettiva compresenza
-            return !tuttiAssenti;
-          }
-
-          // --- COSTRUZIONE SEZIONI PRINCIPALI ---
+          // 🔹 COSTRUZIONE HTML PRINCIPALE
           let html = `
-    <!-- 🟦 ASSENZE GIORNALIERE -->
-    <div class="card mb-4">
-      <div class="card-header bg-primary text-white fw-bold">
-        Assenze giornaliere — ${giorno}/${mese}/${anno}
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-striped table-hover mb-0 align-middle">
-            <thead class="bg-primary text-white">
-              <tr><th style="width:25%;">Docente</th><th>Ore di Assenza / Sostituti (POT)</th></tr>
-            </thead>
-            <tbody>
-  `;
-
-          const summaryRows = []; // per riepilogo finale
-
-          // --- Sezione: Assenze giornaliere ---
-          if (assenzeGiornaliere.length > 0) {
-            assenzeGiornaliere.forEach((a) => {
-              let oreHTML = "";
-              a.dettagli.forEach((det, idx) => {
-                const separatore = idx > 0 ? `<hr class="my-2">` : "";
-
-                const comp = isCompresenza(
-                  det.Classe,
-                  det.OraInizio,
-                  det.OraFine,
-                  a.nome
-                );
-                let potHTML = "";
-
-                if (comp) {
-                  potHTML = `<span class="fst-italic text-secondary">In compresenza</span>`;
-                  summaryRows.push({
-                    docente: a.nome,
-                    classe: det.Classe,
-                    ora: `${det.OraInizio}-${det.OraFine}`,
-                    sostituto: "In compresenza",
-                  });
-                } else {
-                  const potDisponibili = potSlots
-                    .filter(
-                      (p) =>
-                        p.OraInizio === det.OraInizio &&
-                        p.OraFine === det.OraFine
-                    )
-                    .map((p) => p.Docente)
-                    .filter((p) => p !== a.nome);
-
-                  potHTML = potDisponibili.length
-                    ? potDisponibili
-                        .map(
-                          (p) => `
-                  <div class="form-check form-check-inline me-3 sub-option"
-                       data-hour="${det.OraInizio}-${det.OraFine}"
-                       data-sub="${p}">
-                    <input class="form-check-input sub-check" type="radio"
-                           name="pot-${a.nome}-${det.OraInizio.replace(
-                            ":",
-                            ""
-                          )}"
-                           value="${p}" data-absent="${a.nome}" data-class="${
-                            det.Classe
-                          }"
-                           data-hour="${det.OraInizio}-${det.OraFine}">
-                    <label class="form-check-label small">${p}</label>
-                  </div>
-                `
-                        )
-                        .join("")
-                    : `<span class="text-muted fst-italic">Nessun POT disponibile</span>`;
-                }
-
-                oreHTML += `
-          ${separatore}
-          <div class="mb-2">
-            <strong>${det.OraInizio}-${det.OraFine}</strong> (${det.Classe})<br>
-            ${potHTML}
-          </div>`;
-              });
-
-              html += `
-        <tr>
-          <td><i class="bi bi-person-fill me-1 text-primary"></i><strong>${a.nome}</strong></td>
-          <td>${oreHTML}</td>
-        </tr>`;
-            });
-          } else {
-            html += `<tr><td colspan="2" class="text-center text-muted">Nessuna assenza giornaliera trovata</td></tr>`;
-          }
-
-          html += `
-            </tbody>
-          </table>
-        </div>
-      </div>
+  <div class="card mb-4">
+    <div class="card-header bg-primary text-white fw-bold">
+      Assenze giornaliere — ${giorno}/${mese}/${anno}
     </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0 align-middle">
+          <thead class="bg-primary text-white">
+            <tr><th style="width:25%;">Docente</th><th>Ore di Assenza / Sostituti (POT)</th></tr>
+          </thead>
+          <tbody>`;
 
-    <!-- 🟦 ASSENZE ORARIE (stesso colore) -->
-    <div class="card mb-4">
-      <div class="card-header bg-primary text-white fw-bold">
-        Assenze orarie — ${giorno}/${mese}/${anno}
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-striped table-hover mb-0 align-middle">
-            <thead class="bg-primary text-white">
-              <tr><th style="width:25%;">Docente</th><th>Orario / Classe / Sostituti (POT)</th></tr>
-            </thead>
-            <tbody>
-  `;
-
-          // --- Sezione: Assenze orarie ---
-          if (assenzeOrarie.length > 0) {
-            assenzeOrarie.forEach((a) => {
-              const [oraInizio, oraFine] = a.ora.split("-");
-              const comp = isCompresenza(a.classe, oraInizio, oraFine, a.nome);
+          // --- Assenze giornaliere ---
+          assenzeGiornaliere.forEach((a) => {
+            const docente = a.nome;
+            let oreHTML = "";
+            a.dettagli.forEach((det, idx) => {
+              const comp = isCompresenza(
+                det.Classe,
+                det.OraInizio,
+                det.OraFine,
+                docente,
+                giornoEsteso,
+                assenzeGiornaliere,
+                assenzeOrarie
+              );
               let potHTML = "";
 
               if (comp) {
-                potHTML = `<span class="fst-italic text-secondary">In compresenza</span>`;
+                potHTML = `<em class="text-secondary">In compresenza</em>`;
                 summaryRows.push({
-                  docente: a.nome,
-                  classe: a.classe,
-                  ora: a.ora,
+                  docente,
+                  classe: det.Classe,
+                  ora: `${det.OraInizio}-${det.OraFine}`,
                   sostituto: "In compresenza",
                 });
               } else {
-                const potDisponibili = potSlots
-                  .filter(
-                    (p) => p.OraInizio === oraInizio && p.OraFine === oraFine
-                  )
-                  .map((p) => p.Docente)
-                  .filter((p) => p !== a.nome);
-
+                const potDisponibili = potSlots.filter(
+                  (p) =>
+                    p.OraInizio === det.OraInizio && p.OraFine === det.OraFine
+                );
                 potHTML = potDisponibili.length
                   ? potDisponibili
                       .map(
                         (p) => `
-                <div class="form-check form-check-inline me-3 sub-option"
-                     data-hour="${a.ora}"
-                     data-sub="${p}">
+                <div class="form-check form-check-inline sub-option"
+                     data-sub="${p.Docente}" data-hour="${det.OraInizio}-${
+                          det.OraFine
+                        }">
                   <input class="form-check-input sub-check" type="radio"
-                         name="pot-${a.nome}-${a.ora
-                          .replace(":", "")
-                          .replace("-", "")}"
-                         value="${p}" data-absent="${a.nome}" data-class="${
-                          a.classe
-                        }"
-                         data-hour="${a.ora}">
-                  <label class="form-check-label small">${p}</label>
-                </div>
-              `
+                         name="sub-${docente}-${det.OraInizio.replace(
+                          /\s|:/g,
+                          ""
+                        )}"
+                         value="${
+                           p.Docente
+                         }" data-absent="${docente}" data-hour="${
+                          det.OraInizio
+                        }-${det.OraFine}" data-class="${det.Classe}">
+                  <label class="form-check-label">${p.Docente}</label>
+                </div>`
                       )
                       .join("")
                   : `<span class="text-muted fst-italic">Nessun POT disponibile</span>`;
               }
 
-              html += `
-        <tr>
-          <td><i class="bi bi-person-fill me-1 text-primary"></i><strong>${a.nome}</strong></td>
-          <td>
-            <strong>${a.ora}</strong> (${a.classe})<br>
-            ${potHTML}
-          </td>
-        </tr>`;
+              oreHTML += `<div class="border-bottom py-1">${det.OraInizio}-${det.OraFine} (${det.Classe})<br>${potHTML}</div>`;
             });
-          } else {
-            html += `<tr><td colspan="2" class="text-center text-muted">Nessuna assenza oraria trovata</td></tr>`;
-          }
 
+            html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td><td>${oreHTML}</td></tr>`;
+          });
+
+          html += `</tbody></table></div></div></div>`;
+
+          // --- Assenze orarie ---
           html += `
-            </tbody>
-          </table>
-        </div>
-      </div>
+  <div class="card mb-4">
+    <div class="card-header bg-primary text-white fw-bold">
+      Assenze orarie — ${giorno}/${mese}/${anno}
     </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0 align-middle">
+          <thead class="bg-primary text-white">
+            <tr><th style="width:25%;">Docente</th><th>Orari / Classi / Sostituti (POT)</th></tr>
+          </thead>
+          <tbody>`;
 
-    <!-- 🧾 RIEPILOGO (verde) -->
-    <div class="card mb-4">
-      <div class="card-header bg-success text-white fw-bold">Riepilogo Sostituzioni</div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-striped table-hover mb-0 align-middle" id="summary-table">
-            <thead class="bg-success text-white">
-              <tr><th>Docente Assente</th><th>Classe</th><th>Orario</th><th>Sostituto</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-    <div class="mb-3">
-  <label for="notes" class="form-label">Note (facoltative):</label>
-  <textarea id="notes" class="form-control" rows="2"></textarea>
-</div>
-    <!-- Pulsanti di azione -->
-<div class="text-center mb-5">
-  <button id="reset-sost-btn" class="btn btn-outline-danger me-2">
-    <i class="bi bi-trash3"></i> Resetta sostituzioni
-  </button>
-  <button id="export-pdf-btn" class="btn btn-outline-primary">
-    <i class="bi bi-file-earmark-pdf"></i> Esporta PDF
-  </button>
-</div>
-  `;
+          assenzeOrarie.forEach((a) => {
+            const docente = a.nome;
+            const oreString = a.ora || "";
+            const oreArray = oreString
+              .split(",")
+              .map((o) => o.trim())
+              .filter((o) => o.length > 0);
 
-          resultsContainer.innerHTML = html;
+            let oreHTML = "";
+            oreArray.forEach((oraSingola) => {
+              const [oraInizio, oraFine] = oraSingola.split("-");
+              const lezioni = scheduleData.filter(
+                (r) =>
+                  normalizzaGiorno(r.Giorno) ===
+                    normalizzaGiorno(giornoEsteso) &&
+                  r.Docente.trim() === docente &&
+                  r.OraInizio === oraInizio.trim() &&
+                  r.OraFine === oraFine.trim()
+              );
+              if (lezioni.length === 0) {
+                oreHTML += `<div class="border-bottom py-1">${oraSingola} (-)<br><em class="text-muted">Nessun POT disponibile</em></div>`;
+                return;
+              }
 
-          const summaryBody = document.querySelector("#summary-table tbody");
-
-          // Inserisci subito le righe "In compresenza"
-          summaryRows.forEach((r) => {
-            const row = document.createElement("tr");
-            row.innerHTML = `
-      <td>${r.docente}</td>
-      <td>${r.classe}</td>
-      <td>${r.ora}</td>
-      <td><em>${r.sostituto}</em></td>`;
-            summaryBody.appendChild(row);
-          });
-
-          // --- GESTIONE SELEZIONI POT (dinamiche) ---
-          resultsContainer.addEventListener("change", (event) => {
-            if (!event.target.classList.contains("sub-check")) return;
-            const radio = event.target;
-            const sub = radio.value;
-            const hour = radio.dataset.hour;
-            const absent = radio.dataset.absent;
-            const classe = radio.dataset.class;
-
-            // Rimuovi riga precedente (stesso docente/ora)
-            const existing = summaryBody.querySelector(
-              `tr[data-key="${absent}_${hour}"]`
-            );
-            if (existing) existing.remove();
-
-            // Aggiungi riga aggiornata
-            const newRow = document.createElement("tr");
-            newRow.dataset.key = `${absent}_${hour}`;
-            newRow.innerHTML = `
-      <td>${absent}</td>
-      <td>${classe}</td>
-      <td>${hour}</td>
-      <td>${sub}</td>`;
-            summaryBody.appendChild(newRow);
-
-            // Ordina il riepilogo per ora
-            const rows = Array.from(summaryBody.querySelectorAll("tr"));
-            rows.sort((a, b) => {
-              const ha = a.children[2].innerText.split("-")[0];
-              const hb = b.children[2].innerText.split("-")[0];
-              return ha.localeCompare(hb);
-            });
-            summaryBody.innerHTML = "";
-            rows.forEach((r) => summaryBody.appendChild(r));
-
-            // Nascondi docente POT selezionato altrove per la stessa ora
-            document
-              .querySelectorAll(
-                `.sub-option[data-hour="${hour}"][data-sub="${sub}"]`
-              )
-              .forEach((opt) => {
-                const input = opt.querySelector(".sub-check");
-                if (!input.checked) opt.style.display = "none";
-              });
-
-            // Se cambia selezione → ripristina
-            const gruppo = document.getElementsByName(radio.name);
-            gruppo.forEach((el) => {
-              el.addEventListener("change", () => {
-                document
-                  .querySelectorAll(`.sub-option[data-hour="${hour}"]`)
-                  .forEach((opt) => (opt.style.display = "inline-block"));
+              lezioni.forEach((lez) => {
+                const comp = isCompresenza(
+                  lez.Classe,
+                  oraInizio,
+                  oraFine,
+                  docente,
+                  giornoEsteso,
+                  assenzeGiornaliere,
+                  assenzeOrarie
+                );
+                let potHTML = "";
+                if (comp) {
+                  potHTML = `<em class="text-secondary">In compresenza</em>`;
+                  summaryRows.push({
+                    docente,
+                    classe: lez.Classe,
+                    ora: oraSingola,
+                    sostituto: "In compresenza",
+                  });
+                } else {
+                  const potDisponibili = potSlots.filter(
+                    (p) =>
+                      p.OraInizio === oraInizio.trim() &&
+                      p.OraFine === oraFine.trim() &&
+                      p.Docente.trim().toUpperCase() !== "COLLETTA O."
+                  );
+                  potHTML =
+                    potDisponibili.length > 0
+                      ? potDisponibili
+                          .map(
+                            (p) => `
+                    <div class="form-check form-check-inline sub-option"
+                         data-sub="${p.Docente}" data-hour="${oraSingola}">
+                      <input class="form-check-input sub-check" type="radio"
+                             name="sub-${docente}-${oraSingola.replace(
+                              /\s|:/g,
+                              ""
+                            )}"
+                             value="${
+                               p.Docente
+                             }" data-absent="${docente}" data-hour="${oraSingola}" data-class="${
+                              lez.Classe
+                            }">
+                      <label class="form-check-label">${p.Docente}</label>
+                    </div>`
+                          )
+                          .join("")
+                      : `<span class="text-muted fst-italic">Nessun POT disponibile</span>`;
+                }
+                oreHTML += `<div class="border-bottom py-1"><strong>${oraSingola}</strong> (${lez.Classe})<br>${potHTML}</div>`;
               });
             });
+
+            html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td><td>${oreHTML}</td></tr>`;
           });
+
+          html += `</tbody></table></div></div></div>`;
+
+          // --- Riepilogo finale già nel file, quindi non toccato ---
+          document.getElementById("results-container").innerHTML = html;
         }
 
         // --- Pulsante Reset Sostituzioni ---
