@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PitaSOS</title>
 
-    <!-- Bootstrap -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -14,11 +13,12 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     />
-    <!-- Font -->
+
     <link
       href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
@@ -29,7 +29,7 @@
         padding: 1rem;
       }
       .main-container {
-        max-width: 950px;
+        max-width: 1100px;
         margin: 0 auto;
       }
       h1 {
@@ -46,32 +46,59 @@
       .table td {
         vertical-align: middle !important;
       }
-      .table td {
-        vertical-align: top !important;
+      .table thead th {
+        white-space: nowrap;
       }
-      .orario-riga,
-      .sostituto-riga {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid #e9ecef;
-        padding: 4px 0;
+      .teacher-cell {
+        width: 220px;
       }
-      .sostituto-riga {
-        flex-wrap: wrap;
-        gap: 0.4rem;
+      .hour-col {
+        width: 120px;
       }
-      .sub-option {
-        margin-bottom: 2px;
+      .comp-text {
+        color: #6c757d;
+        font-style: italic;
       }
-      .table td[rowspan] {
-        vertical-align: middle !important;
+      .select-pot {
+        min-width: 150px;
       }
+      .btn-pdf {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        border: none;
+        color: #fff;
+        font-weight: 600;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        transition: filter 0.25s ease;
+      }
+      .btn-pdf:hover {
+        filter: brightness(1.15);
+      }
+      .btn-outline-success:hover {
+        background-color: #198754; /* verde Bootstrap */
+        color: #fff !important;
+        border-color: #198754;
+      }
+      .btn-outline-success i {
+        color: #198754;
+      }
+      .btn-outline-success:hover i {
+        color: #fff;
+      }
+
+      /* --- NUOVO STILE PER L'ETICHETTA DELLA CLASSE --- */
+      .class-label {
+        font-size: 0.8em;
+        font-weight: 700;
+        color: #6c757d;
+        display: block;
+        text-align: center;
+        margin-bottom: 0.25rem;
+      }
+      /* --- FINE NUOVO STILE --- */
     </style>
   </head>
   <body>
     <div class="main-container">
-      <!-- Intestazione PitaSOS -->
       <div class="text-center mt-4 mb-4">
         <i
           class="bi bi-person-lines-fill text-primary"
@@ -83,7 +110,6 @@
         </p>
       </div>
 
-      <!-- Selezione Data -->
       <div class="card mb-3">
         <div class="card-header bg-primary text-white fw-semibold">
           1. Seleziona la data
@@ -105,7 +131,6 @@
         </div>
       </div>
 
-      <!-- Risultati -->
       <div id="results-container">
         <div class="alert alert-info text-center mb-0">
           I risultati verranno mostrati qui dopo la lettura dei dati.
@@ -115,16 +140,19 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
+        // --- Costanti e stato ---
+        const HOURS = [
+          "08:00-09:00",
+          "09:00-10:00",
+          "10:00-11:00",
+          "11:00-12:00",
+          "12:00-13:00",
+          "13:00-14:00",
+        ];
+
         const dateInput = document.getElementById("date-input");
         const loadBtn = document.getElementById("load-btn");
         const resultsContainer = document.getElementById("results-container");
-
-        // Imposta la data odierna come predefinita
-        const oggi = new Date();
-        const yyyy = oggi.getFullYear();
-        const mm = String(oggi.getMonth() + 1).padStart(2, "0");
-        const dd = String(oggi.getDate()).padStart(2, "0");
-        dateInput.value = `${yyyy}-${mm}-${dd}`;
 
         const csvBase = "https://progetti.antoniofittipaldi.it/pitasos/";
         const corsProxy = "https://api.allorigins.win/raw?url=";
@@ -139,41 +167,41 @@
           "Venerdì",
           "Sabato",
         ];
+
         let scheduleData = [];
 
-        // --- Utility per leggere CSV in sicurezza ---
+        // Data odierna di default
+        const oggi = new Date();
+        dateInput.value = `${oggi.getFullYear()}-${String(
+          oggi.getMonth() + 1
+        ).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
+
+        // --- Utils ---
         async function fetchCSV(url) {
           try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.text();
+            const r = await fetch(url);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return await r.text();
           } catch {
-            const proxyResponse = await fetch(
-              corsProxy + encodeURIComponent(url)
-            );
-            if (!proxyResponse.ok)
-              throw new Error(`Proxy ${proxyResponse.status}`);
-            return await proxyResponse.text();
+            const p = await fetch(corsProxy + encodeURIComponent(url));
+            if (!p.ok) throw new Error(`Proxy ${p.status}`);
+            return await p.text();
           }
         }
 
-        // --- Carica orario ---
         async function loadOrario() {
           const text = await fetch(orarioFile).then((r) => r.text());
           const lines = text.trim().split("\n");
           const headers = lines[0].split(",").map((h) => h.trim());
           scheduleData = lines.slice(1).map((line) => {
             const values = line.split(",");
-            return headers.reduce((obj, header, i) => {
-              obj[header] = values[i]
-                ? values[i].trim().replace(/^"|"$/g, "")
-                : "";
-              return obj;
+            return headers.reduce((o, h, i) => {
+              o[h] = values[i] ? values[i].trim().replace(/^"|"$/g, "") : "";
+              return o;
             }, {});
           });
         }
 
-        // --- Parsing righe (salta header) ---
         function parseCSVText(text) {
           return text
             .trim()
@@ -183,7 +211,6 @@
             .filter(Boolean);
         }
 
-        // --- Normalizza stringhe (giorni con accenti, ecc.) ---
         const normalizzaGiorno = (g) =>
           (g || "")
             .toString()
@@ -191,19 +218,18 @@
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "");
 
-        // --- Compresenza: ora restituisce anche il nome del compresente ---
+        // Ritorna {stato:boolean, compresente: string|null}
         function isCompresenza(
           classe,
           oraInizio,
           oraFine,
           docente,
           giornoEsteso,
-          assenzeGiornaliere = [],
-          assenzeOrarie = []
+          assG = [],
+          assO = []
         ) {
           if (!Array.isArray(scheduleData))
             return { stato: false, compresente: null };
-
           const compresenti = scheduleData.filter(
             (r) =>
               normalizzaGiorno(r.Giorno || "") ===
@@ -213,34 +239,65 @@
               r.OraFine === oraFine &&
               (r.Docente || "").trim() !== (docente || "").trim()
           );
-
-          if (compresenti.length === 0)
-            return { stato: false, compresente: null };
-
-          const assG = Array.isArray(assenzeGiornaliere)
-            ? assenzeGiornaliere
-            : [];
-          const assO = Array.isArray(assenzeOrarie) ? assenzeOrarie : [];
-
-          // Filtra i compresenti effettivamente presenti (non assenti)
+          if (!compresenti.length) return { stato: false, compresente: null };
           const presenti = compresenti.filter((c) => {
             const nome = (c.Docente || "").trim();
             const assente =
-              assG.some((a) => a.nome === nome) ||
-              assO.some(
+              (assG || []).some((a) => a.nome === nome) ||
+              (assO || []).some(
                 (a) => a.nome === nome && a.ora === `${oraInizio}-${oraFine}`
               );
             return !assente;
           });
+          return presenti.length
+            ? { stato: true, compresente: presenti[0].Docente.trim() }
+            : { stato: false, compresente: null };
+        }
 
-          if (presenti.length > 0) {
-            return { stato: true, compresente: presenti[0].Docente.trim() };
+        // Inserisce/aggiorna nel riepilogo griglia (Docente × Ore)
+        function updateSummaryCell(absent, hour, text, className) {
+          const cell = document.querySelector(
+            `#summary-grid tbody tr[data-absent="${CSS.escape(
+              absent
+            )}"] td[data-hour="${hour}"]`
+          );
+          if (!cell) return;
+          if (!text) {
+            // se vuoto, cancella solo se non è compresenza
+            if (!cell.dataset.comp) cell.innerHTML = "";
+            return;
+          }
+          // se compresenza → corsivo e marca
+          if (text.toLowerCase().includes("compresenza")) {
+            cell.innerHTML = `<em>${text}</em>`;
+            cell.dataset.comp = "1";
           } else {
-            return { stato: false, compresente: null };
+            cell.innerHTML = `${text}<br>(${className})`;
+            delete cell.dataset.comp;
           }
         }
 
-        // --- Mostra risultati ---
+        // Dopo ogni selezione: disabilita lo stesso POT per la stessa ora negli altri select
+        function refreshPotVisibilityForHour(hour) {
+          const selects = document.querySelectorAll(
+            `select[data-hour='${hour}']`
+          );
+          const chosen = new Map();
+          selects.forEach((sel) => {
+            if (sel.value) chosen.set(sel.id, sel.value);
+          });
+
+          const taken = new Set([...chosen.values()]);
+          selects.forEach((sel) => {
+            const myValue = sel.value;
+            sel.querySelectorAll("option[data-pot]").forEach((op) => {
+              const val = op.value;
+              op.disabled = taken.has(val) && val !== myValue;
+            });
+          });
+        }
+
+        // --- Rendering tabelle orizzontali + riepilogo griglia ---
         function displayTables(
           assenzeGiornaliere,
           assenzeOrarie,
@@ -248,11 +305,11 @@
           giornoEsteso
         ) {
           const dateObj = new Date(selectedDate);
-          const giorno = String(dateObj.getDate()).padStart(2, "0");
-          const mese = String(dateObj.getMonth() + 1).padStart(2, "0");
-          const anno = dateObj.getFullYear();
+          const g = String(dateObj.getDate()).padStart(2, "0");
+          const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+          const a = dateObj.getFullYear();
 
-          // POT del giorno (escludi COLLETTA O.)
+          // POT del giorno (no COLLETTA O.)
           const potSlots = scheduleData.filter(
             (r) =>
               normalizzaGiorno(r.Giorno || "") ===
@@ -261,291 +318,253 @@
               (r.Docente || "").trim().toUpperCase() !== "COLLETTA O."
           );
 
-          // Per il riepilogo iniziale (compresenze)
-          const summaryRows = [];
+          const potForHour = (hour) => {
+            const [oi, of] = hour.split("-");
+            return potSlots
+              .filter((p) => p.OraInizio === oi && p.OraFine === of)
+              .map((p) => p.Docente.trim());
+          };
 
-          // ---------- Assenze giornaliere ----------
-          let html = `
-  <div class="card mb-4">
-    <div class="card-header bg-primary text-white fw-bold">
-      Assenze giornaliere — ${giorno}/${mese}/${anno}
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-striped table-hover mb-0 align-middle">
-          <thead class="bg-primary text-white">
-            <tr>
-              <th style="width:25%;">Docente</th>
-              <th style="width:35%;">Orari / Classi</th>
-              <th style="width:40%;">Sostituti (POT)</th>
-            </tr>
-          </thead>
-          <tbody>`;
+          let html = "";
 
-          assenzeGiornaliere.forEach((a) => {
-            const docente = a.nome;
-            const dets = [...a.dettagli].sort((x, y) =>
-              x.OraInizio.localeCompare(y.OraInizio)
-            );
-            if (dets.length === 0) return;
+          // ===== ASSENZE GIORNALIERE =====
+          html += `
+          <div class="card mb-4">
+            <div class="card-header bg-primary text-white fw-bold">Assenze giornaliere — ${g}/${m}/${a}</div>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover mb-0 align-middle">
+                <thead class="bg-primary text-white">
+                  <tr>
+                    <th class="teacher-cell">Docente assente</th>
+                    ${HOURS.map((h) => `<th class="hour-col">${h}</th>`).join(
+                      ""
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+          `;
 
-            dets.forEach((det, idx) => {
-              const comp = isCompresenza(
-                det.Classe,
-                det.OraInizio,
-                det.OraFine,
-                docente,
-                giornoEsteso,
-                assenzeGiornaliere,
-                assenzeOrarie
-              );
+          // compresenze per il riepilogo iniziale
+          const compRows = [];
 
-              let potHTML = "";
-              if (comp.stato) {
-                const nomeComp = comp.compresente
-                  ? ` (${comp.compresente})`
-                  : "";
-                potHTML = `<em class="text-secondary">In compresenza${nomeComp}</em>`;
-                summaryRows.push({
+          assenzeGiornaliere.forEach((ag) => {
+            const docente = ag.nome;
+            const byHour = {};
+            ag.dettagli
+              .filter((d) => (d.Classe || "").trim().toUpperCase() !== "POT")
+              .forEach((d) => {
+                byHour[`${d.OraInizio}-${d.OraFine}`] = {
+                  classe: d.Classe,
+                  Oi: d.OraInizio,
+                  Of: d.OraFine,
+                };
+              });
+
+            html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td>`;
+            HOURS.forEach((hour) => {
+              if (byHour[hour]) {
+                const { classe, Oi, Of } = byHour[hour];
+                const comp = isCompresenza(
+                  classe,
+                  Oi,
+                  Of,
                   docente,
-                  classe: det.Classe,
-                  ora: `${det.OraInizio}-${det.OraFine}`,
-                  sostituto: `In compresenza${nomeComp}`,
-                });
-              } else {
-                const potDisponibili = potSlots.filter(
-                  (p) =>
-                    p.OraInizio === det.OraInizio && p.OraFine === det.OraFine
+                  giornoEsteso,
+                  assenzeGiornaliere,
+                  assenzeOrarie
                 );
-                potHTML =
-                  potDisponibili.length > 0
-                    ? potDisponibili
-                        .map(
-                          (p) => `
-              <div class="form-check form-check-inline sub-option"
-                   data-sub="${p.Docente}" data-hour="${det.OraInizio}-${
-                            det.OraFine
-                          }">
-                <input class="form-check-input sub-check" type="radio"
-                       name="sub-${docente}-${det.OraInizio.replace(
-                            /\s|:/g,
-                            ""
-                          )}"
-                       value="${p.Docente}" data-absent="${docente}"
-                       data-hour="${det.OraInizio}-${det.OraFine}"
-                       data-class="${det.Classe}">
-                <label class="form-check-label">${p.Docente}</label>
-              </div>`
-                        )
-                        .join("")
-                    : `<span class="text-muted fst-italic">Nessun POT disponibile</span>`;
-              }
-
-              // prima riga con il docente, poi righe successive con rowspan
-              if (idx === 0) {
-                html += `
-          <tr>
-            <td rowspan="${dets.length}">
-              <i class="bi bi-person-fill text-primary me-1"></i>${docente}
-            </td>
-            <td>${det.OraInizio}-${det.OraFine} (${det.Classe})</td>
-            <td>${potHTML}</td>
-          </tr>`;
+                if (comp.stato) {
+                  const label = `In compresenza${
+                    comp.compresente ? ` (${comp.compresente})` : ""
+                  }`;
+                  html += `<td class="text-center">
+                              <div class="class-label">${classe}</div>
+                              <div class="comp-text">${label}</div>
+                           </td>`;
+                  compRows.push({ docente, ora: hour, text: label });
+                } else {
+                  const list = potForHour(hour);
+                  if (list.length) {
+                    html += `<td class="text-center">
+                               <div class="class-label">${classe}</div>
+                               <select class="form-select form-select-sm select-pot"
+                                      data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+                                <option value="">—</option>
+                                ${list
+                                  .map(
+                                    (n) =>
+                                      `<option data-pot value="${n}">${n}</option>`
+                                  )
+                                  .join("")}
+                               </select>
+                            </td>`;
+                  } else {
+                    html += `<td class="text-center">
+                                <div class="class-label">${classe}</div>
+                                <span class="text-muted fst-italic">Nessun POT</span>
+                             </td>`;
+                  }
+                }
               } else {
-                html += `
-          <tr>
-            <td>${det.OraInizio}-${det.OraFine} (${det.Classe})</td>
-            <td>${potHTML}</td>
-          </tr>`;
+                html += `<td></td>`;
               }
             });
+            html += `</tr>`;
           });
 
-          html += `</tbody></table></div></div></div>`;
+          html += `</tbody></table></div></div>`;
 
-          // ---------- Assenze orarie ----------
+          // ===== ASSENZE ORARIE =====
           html += `
-  <div class="card mb-4">
-    <div class="card-header bg-primary text-white fw-bold">
-      Assenze orarie — ${giorno}/${mese}/${anno}
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-striped table-hover mb-0 align-middle">
-          <thead class="bg-primary text-white">
-            <tr>
-              <th style="width:25%;">Docente</th>
-              <th style="width:35%;">Orari / Classi</th>
-              <th style="width:40%;">Sostituti (POT)</th>
-            </tr>
-          </thead>
-          <tbody>`;
+          <div class="card mb-4">
+            <div class="card-header bg-primary text-white fw-bold">Assenze orarie — ${g}/${m}/${a}</div>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover mb-0 align-middle">
+                <thead class="bg-primary text-white">
+                  <tr>
+                    <th class="teacher-cell">Docente assente</th>
+                    ${HOURS.map((h) => `<th class="hour-col">${h}</th>`).join(
+                      ""
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+          `;
 
           if (!assenzeOrarie.length) {
-            html += `
-    <tr>
-      <td colspan="3" class="text-center text-muted py-3 fst-italic">
-        Nessuna assenza oraria per la data selezionata
-      </td>
-    </tr>`;
+            html += `<tr><td colspan="${
+              1 + HOURS.length
+            }" class="text-center text-muted py-3 fst-italic">
+              Nessuna assenza oraria per la data selezionata
+            </td></tr>`;
           } else {
-            assenzeOrarie.forEach((a) => {
-              const docente = a.nome;
-              const oreArray = String(a.ora || "")
+            assenzeOrarie.forEach((aor) => {
+              const docente = aor.nome;
+              const oreArray = String(aor.ora || "")
                 .split(",")
                 .map((o) => o.trim())
                 .filter(Boolean);
-
-              // ricava elenco ore/lezione (una riga per ora)
-              const righe = [];
-              oreArray.forEach((oraSingola) => {
-                const [oraInizio, oraFine] = oraSingola.split("-");
+              const byHour = {};
+              oreArray.forEach((ora) => {
+                const [oi, of] = ora.split("-");
                 const lez = scheduleData.filter(
                   (r) =>
                     normalizzaGiorno(r.Giorno) ===
                       normalizzaGiorno(giornoEsteso) &&
                     (r.Docente || "").trim() === docente &&
-                    r.OraInizio === (oraInizio || "").trim() &&
-                    r.OraFine === (oraFine || "").trim()
+                    r.OraInizio === (oi || "").trim() &&
+                    r.OraFine === (of || "").trim()
                 );
-                if (lez.length === 0) {
-                  righe.push({
-                    ora: oraSingola,
-                    classe: "-",
-                    comp: { stato: false, compresente: null },
-                    pot: [],
-                  });
-                } else {
-                  lez.forEach((l) => {
-                    righe.push({
-                      ora: oraSingola,
-                      classe: l.Classe,
-                      comp: isCompresenza(
-                        l.Classe,
-                        (oraInizio || "").trim(),
-                        (oraFine || "").trim(),
-                        docente,
-                        giornoEsteso,
-                        assenzeGiornaliere,
-                        assenzeOrarie
-                      ),
-                      pot: potSlots.filter(
-                        (p) =>
-                          p.OraInizio === (oraInizio || "").trim() &&
-                          p.OraFine === (oraFine || "").trim()
-                      ),
-                    });
-                  });
-                }
+                byHour[ora] = lez.length ? lez[0].Classe : "-";
               });
 
-              if (righe.length === 0) return;
-
-              righe.sort((x, y) =>
-                x.ora.split("-")[0].localeCompare(y.ora.split("-")[0])
-              );
-
-              righe.forEach((r, idx) => {
-                let potHTML = "";
-                if (r.comp.stato) {
-                  const nomeComp = r.comp.compresente
-                    ? ` (${r.comp.compresente})`
-                    : "";
-                  potHTML = `<em class="text-secondary">In compresenza${nomeComp}</em>`;
-                  summaryRows.push({
-                    docente,
-                    classe: r.classe,
-                    ora: r.ora,
-                    sostituto: `In compresenza${nomeComp}`,
-                  });
-                } else if (r.pot.length > 0) {
-                  potHTML = r.pot
-                    .map(
-                      (p) => `
-            <div class="form-check form-check-inline sub-option"
-                 data-sub="${p.Docente}" data-hour="${r.ora}">
-              <input class="form-check-input sub-check" type="radio"
-                     name="sub-${docente}-${r.ora.replace(/\s|:/g, "")}"
-                     value="${p.Docente}" data-absent="${docente}"
-                     data-hour="${r.ora}" data-class="${r.classe}">
-              <label class="form-check-label">${p.Docente}</label>
-            </div>`
-                    )
-                    .join("");
+              html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td>`;
+              HOURS.forEach((hour) => {
+                if (byHour[hour]) {
+                  const classe = byHour[hour];
+                  if (classe !== "-") {
+                    const [oi, of] = hour.split("-");
+                    const comp = isCompresenza(
+                      classe,
+                      oi,
+                      of,
+                      docente,
+                      giornoEsteso,
+                      assenzeGiornaliere,
+                      assenzeOrarie
+                    );
+                    if (comp.stato) {
+                      const label = `In compresenza${
+                        comp.compresente ? ` (${comp.compresente})` : ""
+                      }`;
+                      html += `<td class="text-center">
+                                  <div class="class-label">${classe}</div>
+                                  <div class="comp-text">${label}</div>
+                               </td>`;
+                      compRows.push({ docente, ora: hour, text: label });
+                    } else {
+                      const list = potForHour(hour);
+                      if (list.length) {
+                        html += `<td class="text-center">
+                                  <div class="class-label">${classe}</div>
+                                  <select class="form-select form-select-sm select-pot"
+                                          data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+                                    <option value="">—</option>
+                                    ${list
+                                      .map(
+                                        (n) =>
+                                          `<option data-pot value="${n}">${n}</option>`
+                                      )
+                                      .join("")}
+                                  </select>
+                                </td>`;
+                      } else {
+                        html += `<td class="text-center">
+                                    <div class="class-label">${classe}</div>
+                                    <span class="text-muted fst-italic">Nessun POT</span>
+                                 </td>`;
+                      }
+                    }
+                  } else {
+                    html += `<td><span class="text-muted">-</span></td>`;
+                  }
                 } else {
-                  potHTML = `<span class="text-muted fst-italic">Nessun POT disponibile</span>`;
-                }
-
-                if (idx === 0) {
-                  html += `
-          <tr>
-            <td rowspan="${righe.length}">
-              <i class="bi bi-person-fill text-primary me-1"></i>${docente}
-            </td>
-            <td>${r.ora} (${r.classe})</td>
-            <td>${potHTML}</td>
-          </tr>`;
-                } else {
-                  html += `
-          <tr>
-            <td>${r.ora} (${r.classe})</td>
-            <td>${potHTML}</td>
-          </tr>`;
+                  html += `<td></td>`;
                 }
               });
+              html += `</tr>`;
             });
           }
 
-          html += `</tbody></table></div></div></div>`;
+          html += `</tbody></table></div></div>`;
 
-          // Ordina compresenze nel riepilogo per ora
-          summaryRows.sort((a, b) =>
-            a.ora.split("-")[0].localeCompare(b.ora.split("-")[0])
-          );
+          // ===== RIEPILOGO A GRIGLIA (Docente × Ore) =====
+          // set docenti assenti (giornaliere ∪ orarie)
+          const allAbsent = Array.from(
+            new Set([
+              ...assenzeGiornaliere.map((x) => x.nome),
+              ...assenzeOrarie.map((x) => x.nome),
+            ])
+          ).sort((a, b) => a.localeCompare(b));
 
-          // ---------- Riepilogo ----------
           html += `
-  <div class="card mb-4">
-    <div class="card-header bg-success text-white fw-bold">
-      Riepilogo Sostituzioni Selezionate
-    </div>
-    <div class="card-body p-3">
-      <div class="table-responsive">
-        <table class="table table-striped table-hover align-middle" id="summary-table">
-          <thead class="bg-success text-white">
-            <tr>
-              <th>Docente Assente</th>
-              <th>Classe</th>
-              <th>Orario</th>
-              <th>Sostituto</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              summaryRows.length
-                ? summaryRows
-                    .map(
-                      (r) => `
-              <tr data-hour="${r.ora}">
-                <td>${r.docente}</td>
-                <td>${r.classe}</td>
-                <td>${r.ora}</td>
-                <td><em>${r.sostituto}</em></td>
-              </tr>`
-                    )
-                    .join("")
-                : `<tr><td colspan="4" class="text-center text-muted">Nessuna selezione effettuata.</td></tr>`
-            }
-          </tbody>
-        </table>
-      </div>
+          <div class="card mb-4">
+            <div class="card-header bg-success text-white fw-bold">Riepilogo Sostituzioni Selezionate</div>
+            <div class="card-body p-3">
+              <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle" id="summary-grid">
+                  <thead class="bg-success text-white">
+                    <tr>
+                      <th class="teacher-cell">Docente assente</th>
+                      ${HOURS.map((h) => `<th class="hour-col">${h}</th>`).join(
+                        ""
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${allAbsent
+                      .map(
+                        (nome) => `
+                      <tr data-absent="${nome}">
+                        <td>${nome}</td>
+                        ${HOURS.map(
+                          (h) =>
+                            `<td data-hour="${h}" class="text-center"></td>`
+                        ).join("")}
+                      </tr>
+                    `
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              </div>
 
-      <div class="mt-3">
-        <label for="notes" class="form-label fw-semibold">Note (opzionali)</label>
-        <textarea id="notes" class="form-control" rows="3" placeholder="Scrivi eventuali note..."></textarea>
-      </div>
+              <div class="mt-3">
+                <label for="notes" class="form-label fw-semibold">Note (opzionali)</label>
+                <textarea id="notes" class="form-control" rows="3" placeholder="Scrivi eventuali note..."></textarea>
+              </div>
+
 <div class="d-flex flex-column flex-md-row justify-content-center gap-3 mt-4">
-
   <button id="export-pdf-btn" class="btn btn-outline-success px-4 fw-semibold">
     <i class="bi bi-file-earmark-pdf-fill me-1"></i> Scarica PDF
   </button>
@@ -553,87 +572,52 @@
     <i class="bi bi-arrow-counterclockwise me-1"></i> Resetta selezioni
   </button>
 </div>
-    </div>
-  </div>`;
+            </div>
+          </div>
+          `;
 
-          // Render
-          document.getElementById("results-container").innerHTML = html;
+          resultsContainer.innerHTML = html;
 
-          // ---- handler scelte radio → aggiorna riepilogo + nascondi lo stesso POT in altre classi della stessa ora
-          document.querySelectorAll(".sub-check").forEach((radio) => {
-            radio.addEventListener("change", (e) => {
-              const { value: sostituto, dataset } = e.target;
-              const { absent, hour, class: classe } = dataset;
+          // Precompila il riepilogo con le compresenze rilevate
+          compRows.forEach((row) =>
+            updateSummaryCell(row.docente, row.ora, row.text)
+          );
 
-              const summaryBody = document.querySelector(
-                "#summary-table tbody"
-              );
-              if (!summaryBody) return;
-
-              // rimuovi placeholder
-              const ph = summaryBody.querySelector("td[colspan='4']");
-              if (ph) ph.parentElement.remove();
-
-              // aggiorna / aggiunge riga
-              let row = Array.from(summaryBody.rows).find(
-                (r) =>
-                  r.cells[0].textContent === absent &&
-                  r.cells[2].textContent === hour
-              );
-              if (!row) {
-                row = document.createElement("tr");
-                row.dataset.hour = hour;
-                row.innerHTML = `<td>${absent}</td><td>${classe}</td><td>${hour}</td><td>${sostituto}</td>`;
-                inserisciRigaOrdinata(summaryBody, row);
-              } else {
-                row.cells[1].textContent = classe;
-                row.cells[3].textContent = sostituto;
-              }
-
-              // nascondi quel POT per la stessa ora negli altri docenti
-              document
-                .querySelectorAll(`.sub-option[data-hour='${hour}']`)
-                .forEach((opt) => {
-                  const input = opt.querySelector("input");
-                  const sameAbsent = input.dataset.absent === absent;
-                  const sameSostituto = input.value === sostituto;
-                  if (!sameAbsent && sameSostituto) {
-                    opt.style.display = "none";
-                  } else if (!sameAbsent && !sameSostituto) {
-                    opt.style.display = "inline-block";
-                  }
-                });
+          // ====== Handlers dei select ======
+          document.querySelectorAll(".select-pot").forEach((sel) => {
+            sel.addEventListener("change", (e) => {
+              const select = e.target;
+              const sostituto = select.value;
+              const absent = select.dataset.absent;
+              const hour = select.dataset.hour;
+              const className = select.dataset.class;
+              // Aggiorna griglia riepilogo
+              updateSummaryCell(absent, hour, sostituto || "", className);
+              // Gestione pot visibilità tra select della stessa ora
+              refreshPotVisibilityForHour(hour);
             });
           });
 
-          // pulsanti (già presenti)
+          // Dopo render: applica visibilità iniziale per ogni ora
+          HOURS.forEach(refreshPotVisibilityForHour);
+
+          // ===== Pulsante reset (mantiene compresenze) =====
           document
             .getElementById("reset-sost-btn")
             ?.addEventListener("click", () => {
+              // svuota select
               document
-                .querySelectorAll(".sub-check")
-                .forEach((cb) => (cb.checked = false));
+                .querySelectorAll(".select-pot")
+                .forEach((sel) => (sel.value = ""));
+              HOURS.forEach(refreshPotVisibilityForHour);
+              // pulisci solo celle non-compresenza
               document
-                .querySelectorAll(".sub-option")
-                .forEach((opt) => (opt.style.display = "inline-block"));
-
-              const summaryBody = document.querySelector(
-                "#summary-table tbody"
-              );
-              if (summaryBody) {
-                summaryBody.querySelectorAll("tr").forEach((tr) => {
-                  const txt = (tr.lastElementChild?.textContent || "")
-                    .toLowerCase()
-                    .trim();
-                  if (!txt.includes("in compresenza")) tr.remove();
+                .querySelectorAll(`#summary-grid td[data-hour]`)
+                .forEach((td) => {
+                  if (!td.dataset.comp) td.innerHTML = "";
                 });
-                if (!summaryBody.children.length) {
-                  const tr = document.createElement("tr");
-                  tr.innerHTML = `<td colspan="4" class="text-center text-muted">Nessuna selezione effettuata.</td>`;
-                  summaryBody.appendChild(tr);
-                }
-              }
 
+              // toast
               const ok = document.createElement("div");
               ok.className =
                 "alert alert-success text-center mt-3 fade show shadow";
@@ -653,133 +637,153 @@
               window.scrollTo({ top: 0, behavior: "smooth" });
             });
 
-          document
-            .getElementById("export-pdf-btn")
-            ?.addEventListener("click", () => {
-              const { jsPDF } = window.jspdf;
-              const doc = new jsPDF({ orientation: "landscape" });
+          // ===== Pulsante PDF: usa la griglia oraria =====
+          document.addEventListener("click", (e) => {
+            const exportBtn = e.target.closest("#export-pdf-btn");
+            if (!exportBtn) return;
 
-              const dateEl = document.getElementById("date-input");
-              const dateObj =
-                dateEl && dateEl.value ? new Date(dateEl.value) : new Date();
-              const dataFmt = dateObj.toLocaleDateString("it-IT", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              });
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: "landscape" });
 
-              doc.setFontSize(14);
-              doc.text(`Sostituzioni del giorno ${dataFmt}`, 14, 15);
+            const dateEl = document.getElementById("date-input");
+            const dateObj =
+              dateEl && dateEl.value ? new Date(dateEl.value) : new Date();
+            const dataFmt = dateObj.toLocaleDateString("it-IT", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            });
 
-              doc.autoTable({
-                html: "#summary-table",
-                startY: 25,
-                theme: "grid",
-                headStyles: {
-                  fillColor: [25, 135, 84],
-                  textColor: [255, 255, 255],
-                },
-                styles: {
-                  fontSize: 10,
-                  cellPadding: 3,
-                  lineColor: [222, 226, 230],
-                  lineWidth: 0.2,
-                  textColor: [33, 37, 41],
-                },
-                didParseCell: (data) => {
-                  const t =
-                    data.cell.text && data.cell.text[0]
-                      ? data.cell.text[0].toLowerCase()
-                      : "";
-                  if (t.includes("in compresenza")) {
-                    data.cell.styles.fontStyle = "italic";
-                    data.cell.styles.textColor = [108, 117, 125];
-                  }
-                },
-                margin: { top: 25, left: 10, right: 10 },
-              });
+            doc.setFontSize(14);
 
-              // note
-              const notesEl = document.getElementById("notes");
-              const notesText = notesEl ? notesEl.value.trim() : "";
-              if (notesText) {
+            const summaryTable = document.getElementById("summary-grid");
+
+            if (!summaryTable) {
+              alert("Nessuna tabella di riepilogo disponibile per il PDF.");
+              return;
+            }
+
+            doc.autoTable({
+              html: "#summary-grid",
+              startY: 35,
+              theme: "grid",
+              headStyles: {
+                fillColor: [25, 135, 84],
+                textColor: [255, 255, 255],
+                halign: "center",
+              },
+              styles: {
+                fontSize: 10,
+                cellPadding: 3,
+                lineColor: [222, 226, 230],
+                lineWidth: 0.2,
+                textColor: [33, 37, 41],
+                halign: "center",
+                valign: "middle",
+              },
+              tableWidth: "wrap",
+              columnStyles: {
+                0: { cellWidth: 35 },
+                1: { cellWidth: 35 },
+                2: { cellWidth: 35 },
+                3: { cellWidth: 35 },
+                4: { cellWidth: 35 },
+                5: { cellWidth: 35 },
+                6: { cellWidth: 35 },
+              },
+              tableLineWidth: 0.1,
+              didDrawPage: (data) => {
                 const pageWidth = doc.internal.pageSize.getWidth();
                 const pageHeight = doc.internal.pageSize.getHeight();
-                let y =
-                  (doc.lastAutoTable && doc.lastAutoTable.finalY
-                    ? doc.lastAutoTable.finalY
-                    : 25) + 10;
-                if (y > pageHeight - 20) {
-                  doc.addPage();
-                  y = 20;
-                }
-                doc.setFontSize(9);
-                doc.setTextColor(90);
-                doc.text(doc.splitTextToSize(notesText, pageWidth - 28), 14, y);
-              }
 
-              // paginazione centrata
-              const pageCount = doc.getNumberOfPages();
-              const pageWidth = doc.internal.pageSize.getWidth();
-              const pageHeight = doc.internal.pageSize.getHeight();
-              for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                const footer = `Pagina ${i} / ${pageCount}`;
+                doc.setFontSize(14);
+                doc.setTextColor(33, 37, 41);
+                doc.setFont("helvetica", "bold");
+                doc.text(
+                  `Sostituzioni del giorno ${dataFmt}`,
+                  pageWidth / 2,
+                  15,
+                  { align: "center" }
+                );
+
+                const pageCount = doc.getNumberOfPages();
+                const footer = `Pagina ${data.pageNumber} / ${pageCount}`;
                 doc.setFontSize(10);
                 doc.setTextColor(150);
                 const textWidth = doc.getTextWidth(footer);
                 const xCenter = (pageWidth - textWidth) / 2;
                 doc.text(footer, xCenter, pageHeight - 10);
-              }
+              },
+              didParseCell: (data) => {
+                const txt =
+                  data.cell.text && data.cell.text[0]
+                    ? data.cell.text[0].toLowerCase()
+                    : "";
 
-              const y = String(dateObj.getFullYear());
-              const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-              const d = String(dateObj.getDate()).padStart(2, "0");
-              doc.save(`riepilogo_sostituzioni_${y}${m}${d}.pdf`);
+                if (
+                  data.section === "head" &&
+                  data.column.index === 0 &&
+                  data.cell.text[0].toLowerCase().includes("docente")
+                ) {
+                  data.cell.text[0] = "Docente assente";
+                }
 
-              const ok = document.createElement("div");
-              ok.className =
-                "alert alert-primary text-center mt-3 fade show shadow";
-              ok.style.position = "fixed";
-              ok.style.bottom = "20px";
-              ok.style.left = "50%";
-              ok.style.transform = "translateX(-50%)";
-              ok.style.zIndex = "9999";
-              ok.style.minWidth = "280px";
-              ok.innerHTML = `<i class="bi bi-file-earmark-check-fill me-2"></i> PDF generato correttamente`;
-              document.body.appendChild(ok);
-              setTimeout(() => {
-                ok.classList.remove("show");
-                ok.classList.add("fade");
-                setTimeout(() => ok.remove(), 400);
-              }, 3000);
+                if (txt.includes("in compresenza")) {
+                  data.cell.styles.fontStyle = "italic";
+                  data.cell.styles.textColor = [108, 117, 125];
+                }
+
+                // --- MODIFICA QUI: Aggiunta la condizione per colorare il testo di rosso ---
+                // Colora il testo della colonna "Docente assente" (indice 0) nel corpo (body) della tabella
+                if (data.section === "body" && data.column.index === 0) {
+                  data.cell.styles.textColor = [220, 53, 69]; // Colore rosso (es. #dc3545 di Bootstrap)
+                }
+                // --- FINE MODIFICA ---
+              },
+              margin: { top: 30, left: 10, right: 10 },
             });
-        }
 
-        // Inserisce la riga nel riepilogo in ordine orario
-        function inserisciRigaOrdinata(summaryBody, newRow) {
-          const cleanHour = (h) =>
-            h.replace(/\s/g, "").split("-")[0].padStart(5, "0"); // es. "8:00" → "08:00"
-
-          const newHour = cleanHour(newRow.dataset.hour || "");
-
-          const rows = Array.from(summaryBody.querySelectorAll("tr"));
-          let inserted = false;
-
-          for (const row of rows) {
-            const currentHour = cleanHour(row.dataset.hour || "");
-            if (newHour < currentHour) {
-              summaryBody.insertBefore(newRow, row);
-              inserted = true;
-              break;
+            const notesEl = document.getElementById("notes");
+            const notesText = notesEl ? notesEl.value.trim() : "";
+            if (notesText) {
+              const pageWidth = doc.internal.pageSize.getWidth();
+              let y =
+                (doc.lastAutoTable && doc.lastAutoTable.finalY
+                  ? doc.lastAutoTable.finalY
+                  : 25) + 10;
+              doc.setFontSize(9);
+              doc.setTextColor(90);
+              const wrapped = doc.splitTextToSize(notesText, pageWidth - 28);
+              doc.text(wrapped, 14, y);
             }
-          }
 
-          if (!inserted) summaryBody.appendChild(newRow);
+            const y = String(dateObj.getFullYear());
+            const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+            const d = String(dateObj.getDate()).padStart(2, "0");
+            const filename = `riepilogo_sostituzioni_${y}${m}${d}.pdf`;
+            doc.save(filename);
+
+            const alertDiv = document.createElement("div");
+            alertDiv.className =
+              "alert alert-success text-center mt-3 fade show shadow";
+            alertDiv.style.position = "fixed";
+            alertDiv.style.bottom = "20px";
+            alertDiv.style.left = "50%";
+            alertDiv.style.transform = "translateX(-50%)";
+            alertDiv.style.zIndex = "9999";
+            alertDiv.style.minWidth = "280px";
+            alertDiv.innerHTML = `<i class="bi bi-file-earmark-pdf-fill me-2"></i> PDF scaricato correttamente`;
+            document.body.appendChild(alertDiv);
+            setTimeout(() => {
+              alertDiv.classList.remove("show");
+              alertDiv.classList.add("fade");
+              setTimeout(() => alertDiv.remove(), 400);
+            }, 3000);
+          });
         }
 
-        // --- Leggi dati remoti e mostra ---
+        // --- Click su "Leggi dati" ---
         loadBtn.addEventListener("click", async () => {
           const selectedDate = dateInput.value;
           if (!selectedDate) return alert("Seleziona una data!");
@@ -788,15 +792,15 @@
           await loadOrario();
 
           const dateObj = new Date(selectedDate);
-          const giorno = String(dateObj.getDate()).padStart(2, "0");
-          const mese = String(dateObj.getMonth() + 1).padStart(2, "0");
-          const anno = dateObj.getFullYear();
           const giornoSettimana = abbrevMap[dateObj.getUTCDay()];
           const giornoEsteso = giorniEstesi[dateObj.getUTCDay()];
-          const meseFolder = `${mese}`;
+          const g = String(dateObj.getDate()).padStart(2, "0");
+          const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+          const a = dateObj.getFullYear();
+          const meseFolder = `${m}`;
 
-          const urlAssenze = `${csvBase}${meseFolder}/assenze_${giornoSettimana}-${giorno}${mese}${anno}.csv`;
-          const urlPermessi = `${csvBase}${meseFolder}/permessi_${giornoSettimana}-${giorno}${mese}${anno}.csv`;
+          const urlAssenze = `${csvBase}${meseFolder}/assenze_${giornoSettimana}-${g}${m}${a}.csv`;
+          const urlPermessi = `${csvBase}${meseFolder}/permessi_${giornoSettimana}-${g}${m}${a}.csv`;
 
           try {
             const [assenzeCSV, permessiCSV] = await Promise.all([
@@ -804,19 +808,15 @@
               fetchCSV(urlPermessi),
             ]);
 
-            // File "assenze": una colonna (nomi) con header
             const assenzeLines = parseCSVText(assenzeCSV);
             const assenzeGiornaliere = assenzeLines.map((raw) => {
               const cleanName = String(raw || "")
                 .replace(/^\"|\"$/g, "")
                 .trim();
-              // lezioni del docente (escludi POT)
               const lezioni = scheduleData.filter(
                 (r) =>
                   (r.Docente || "").trim() === cleanName &&
-                  normalizzaGiorno(r.Giorno) ===
-                    normalizzaGiorno(giornoEsteso) &&
-                  (r.Classe || "").trim() !== "POT"
+                  normalizzaGiorno(r.Giorno) === normalizzaGiorno(giornoEsteso)
               );
               const dettagli = lezioni.map((l) => ({
                 OraInizio: l.OraInizio,
@@ -826,14 +826,13 @@
               return { nome: cleanName, dettagli };
             });
 
-            // File "permessi": formato "NOME","HH:MM-HH:MM, HH:MM-HH:MM"
             const permLines = parseCSVText(permessiCSV);
             const assenzeOrarie = permLines
               .map((line) => {
-                const clean = String(line || "")
+                const m = String(line || "")
                   .trim()
-                  .replace(/\r/g, "");
-                const m = clean.match(/^\"?(.*?)\"?\s*,\s*\"?(.+?)\"?$/);
+                  .replace(/\r/g, "")
+                  .match(/^\"?(.*?)\"?\s*,\s*\"?(.+?)\"?$/);
                 if (!m) return null;
                 const docente = m[1].trim().replace(/^\"|\"$/g, "");
                 const oreRaw = m[2].trim();
@@ -851,12 +850,9 @@
               selectedDate,
               giornoEsteso
             );
-          } catch (error) {
-            console.error(error);
-            resultsContainer.innerHTML = `
-    <div class="alert alert-danger text-center">
-      Errore nella lettura dei file CSV: ${error.message}
-    </div>`;
+          } catch (err) {
+            console.error(err);
+            resultsContainer.innerHTML = `<div class="alert alert-danger text-center">Errore nella lettura dei file CSV: ${err.message}</div>`;
           }
         });
       });
