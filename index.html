@@ -301,13 +301,10 @@
           const m = String(dateObj.getMonth() + 1).padStart(2, "0");
           const a = dateObj.getFullYear();
 
-          // ======================= INIZIO MODIFICA =======================
-          // Crea un elenco di tutti i docenti assenti (giornalieri + orari)
           const allAbsentNames = new Set([
             ...assenzeGiornaliere.map((a) => a.nome),
             ...assenzeOrarie.map((a) => a.nome),
           ]);
-          // ======================== FINE MODIFICA ========================
 
           const potSlots = scheduleData.filter(
             (r) =>
@@ -317,20 +314,16 @@
               (r.Docente || "").trim().toUpperCase() !== "COLLETTA O."
           );
 
-          // ======================= INIZIO MODIFICA =======================
-          // Modifica la funzione per filtrare i docenti assenti dall'elenco POT
           const potForHour = (hour, absentTeachersSet) => {
             const [oi, of] = hour.split("-");
             const availableTeachers = potSlots
               .filter((p) => p.OraInizio === oi && p.OraFine === of)
               .map((p) => p.Docente.trim());
 
-            // Ritorna solo i docenti che NON sono nella lista degli assenti
             return availableTeachers.filter(
               (teacher) => !absentTeachersSet.has(teacher)
             );
           };
-          // ======================== FINE MODIFICA ========================
 
           let html = "";
 
@@ -388,7 +381,6 @@
                            </td>`;
                   compRows.push({ docente, ora: hour, text: label });
                 } else {
-                  // MODIFICA QUI: Passa l'elenco degli assenti alla funzione
                   const list = potForHour(hour, allAbsentNames);
                   if (list.length) {
                     html += `<td class="text-center">
@@ -490,7 +482,6 @@
                                </td>`;
                       compRows.push({ docente, ora: hour, text: label });
                     } else {
-                      // MODIFICA QUI: Passa l'elenco degli assenti alla funzione
                       const list = potForHour(hour, allAbsentNames);
                       if (list.length) {
                         html += `<td class="text-center">
@@ -593,7 +584,49 @@
           HOURS.forEach(refreshPotVisibilityForHour);
         }
 
-        // Ascoltatore di eventi centralizzato per i click
+        // ======================= INIZIO MODIFICA =======================
+        // Funzione per simulare l'upload del CSV sul server
+        async function uploadCsvToServer(csvContent, filename) {
+          console.log("--- INIZIO RIEPILOGO CSV DA SALVARE SUL SERVER ---");
+          console.log("NOME FILE:", filename);
+          console.log("CONTENUTO:\n" + csvContent);
+          console.log("--- FINE RIEPILOGO CSV ---");
+
+          // NOTA BENE: Il codice JavaScript eseguito nel browser non può salvare file
+          // direttamente su un server per motivi di sicurezza.
+          // In una applicazione reale, qui si farebbe una richiesta a uno script
+          // lato server (es. in PHP, Node.js, Python) per gestire il salvataggio.
+          // L'alert sottostante simula il successo di questa operazione.
+
+          /*alert(
+            `Simulazione di salvataggio remoto:\n\nFile: ${filename}\n\nContenuto:\n${csvContent}`
+          );*/
+
+          /* ESEMPIO DI CODICE PER UN VERO UPLOAD:
+          const serverEndpoint = 'https://progetti.antoniofittipaldi.it/pitasos/salva_csv.php'; // URL dello script server
+          
+          try {
+              const formData = new FormData();
+              formData.append('filename', filename);
+              formData.append('csvdata', csvContent);
+              
+              const response = await fetch(serverEndpoint, {
+                  method: 'POST',
+                  body: formData
+              });
+              
+              if (response.ok) {
+                  console.log("File CSV salvato con successo sul server.");
+              } else {
+                  console.error("Errore nel salvataggio del file CSV sul server.");
+              }
+          } catch (error) {
+              console.error("Errore di rete o nella richiesta:", error);
+          }
+          */
+        }
+        // ======================== FINE MODIFICA ========================
+
         document.addEventListener("click", function (e) {
           if (e.target.closest("#export-pdf-btn")) {
             const allSelects = document.querySelectorAll("select.select-pot");
@@ -726,11 +759,11 @@
               doc.text(footer, xCenter, pageHeight - 10);
             }
 
-            const y = String(dateObj.getFullYear());
-            const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-            const d = String(dateObj.getDate()).padStart(2, "0");
-            const filename = `riepilogo_sostituzioni_${y}${m}${d}.pdf`;
-            doc.save(filename);
+            const y_pdf = String(dateObj.getFullYear());
+            const m_pdf = String(dateObj.getMonth() + 1).padStart(2, "0");
+            const d_pdf = String(dateObj.getDate()).padStart(2, "0");
+            const pdfFilename = `riepilogo_sostituzioni_${y_pdf}${m_pdf}${d_pdf}.pdf`;
+            doc.save(pdfFilename);
 
             const alertDiv = document.createElement("div");
             alertDiv.className =
@@ -748,6 +781,35 @@
               alertDiv.classList.add("fade");
               setTimeout(() => alertDiv.remove(), 400);
             }, 3000);
+
+            // ======================= INIZIO MODIFICA =======================
+            // Generazione e "upload" del CSV di riepilogo
+            let csvContent = "DocenteAssente,Ora,Sostituto,Classe\n";
+            const rows = summaryTable.querySelectorAll("tbody tr");
+            rows.forEach((row) => {
+              const absentTeacher = row.cells[0].innerText;
+              const hourCells = row.querySelectorAll("td[data-hour]");
+              hourCells.forEach((cell) => {
+                if (cell.innerHTML && !cell.innerHTML.includes("<em>")) {
+                  const hour = cell.dataset.hour;
+                  const parts = cell.innerHTML.split("<br>");
+                  const substitute = parts[0].trim();
+                  const className = parts[1]
+                    ? parts[1].replace(/[()]/g, "").trim()
+                    : "";
+                  csvContent += `"${absentTeacher}","${hour}","${substitute}","${className}"\n`;
+                }
+              });
+            });
+
+            const giornoSettimana = abbrevMap[dateObj.getUTCDay()];
+            const g_csv = String(dateObj.getDate()).padStart(2, "0");
+            const m_csv = String(dateObj.getMonth() + 1).padStart(2, "0");
+            const a_csv = dateObj.getFullYear();
+            const csvFilename = `sostituzioni_${giornoSettimana}-${g_csv}${m_csv}${a_csv}.csv`;
+
+            uploadCsvToServer(csvContent, csvFilename);
+            // ======================== FINE MODIFICA ========================
           }
 
           if (e.target.closest("#reset-sost-btn")) {
@@ -847,10 +909,13 @@
           const g = String(dateObj.getDate()).padStart(2, "0");
           const m = String(dateObj.getMonth() + 1).padStart(2, "0");
           const a = dateObj.getFullYear();
-          const meseFolder = `${m}`;
+          // ======================= INIZIO MODIFICA =======================
+          // Aggiorna il percorso della cartella remota includendo l'anno
+          const remoteFolder = `${a}/${m}`;
+          // ======================== FINE MODIFICA ========================
 
-          const urlAssenze = `${csvBase}${meseFolder}/assenze_${giornoSettimana}-${g}${m}${a}.csv`;
-          const urlPermessi = `${csvBase}${meseFolder}/permessi_${giornoSettimana}-${g}${m}${a}.csv`;
+          const urlAssenze = `${csvBase}${remoteFolder}/assenze_${giornoSettimana}-${g}${m}${a}.csv`;
+          const urlPermessi = `${csvBase}${remoteFolder}/permessi_${giornoSettimana}-${g}${m}${a}.csv`;
 
           let assenzeCSV, permessiCSV;
 
