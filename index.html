@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="it">
   <head>
-    <meta charset="UTF--8" />
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PitaSOS</title>
 
@@ -301,6 +301,14 @@
           const m = String(dateObj.getMonth() + 1).padStart(2, "0");
           const a = dateObj.getFullYear();
 
+          // ======================= INIZIO MODIFICA =======================
+          // Crea un elenco di tutti i docenti assenti (giornalieri + orari)
+          const allAbsentNames = new Set([
+            ...assenzeGiornaliere.map((a) => a.nome),
+            ...assenzeOrarie.map((a) => a.nome),
+          ]);
+          // ======================== FINE MODIFICA ========================
+
           const potSlots = scheduleData.filter(
             (r) =>
               normalizzaGiorno(r.Giorno || "") ===
@@ -309,12 +317,20 @@
               (r.Docente || "").trim().toUpperCase() !== "COLLETTA O."
           );
 
-          const potForHour = (hour) => {
+          // ======================= INIZIO MODIFICA =======================
+          // Modifica la funzione per filtrare i docenti assenti dall'elenco POT
+          const potForHour = (hour, absentTeachersSet) => {
             const [oi, of] = hour.split("-");
-            return potSlots
+            const availableTeachers = potSlots
               .filter((p) => p.OraInizio === oi && p.OraFine === of)
               .map((p) => p.Docente.trim());
+
+            // Ritorna solo i docenti che NON sono nella lista degli assenti
+            return availableTeachers.filter(
+              (teacher) => !absentTeachersSet.has(teacher)
+            );
           };
+          // ======================== FINE MODIFICA ========================
 
           let html = "";
 
@@ -372,7 +388,8 @@
                            </td>`;
                   compRows.push({ docente, ora: hour, text: label });
                 } else {
-                  const list = potForHour(hour);
+                  // MODIFICA QUI: Passa l'elenco degli assenti alla funzione
+                  const list = potForHour(hour, allAbsentNames);
                   if (list.length) {
                     html += `<td class="text-center">
                                <div class="class-label">${classe}</div>
@@ -473,7 +490,8 @@
                                </td>`;
                       compRows.push({ docente, ora: hour, text: label });
                     } else {
-                      const list = potForHour(hour);
+                      // MODIFICA QUI: Passa l'elenco degli assenti alla funzione
+                      const list = potForHour(hour, allAbsentNames);
                       if (list.length) {
                         html += `<td class="text-center">
                                   <div class="class-label">${classe}</div>
@@ -510,7 +528,7 @@
 
           html += `</tbody></table></div></div>`;
 
-          const allAbsent = Array.from(
+          const allAbsentForSummary = Array.from(
             new Set([
               ...assenzeGiornaliere.map((x) => x.nome),
               ...assenzeOrarie.map((x) => x.nome),
@@ -532,7 +550,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    ${allAbsent
+                    ${allAbsentForSummary
                       .map(
                         (nome) => `
                       <tr data-absent="${nome}">
@@ -578,7 +596,6 @@
         // Ascoltatore di eventi centralizzato per i click
         document.addEventListener("click", function (e) {
           if (e.target.closest("#export-pdf-btn")) {
-            // ======================= INIZIO MODIFICA =======================
             const allSelects = document.querySelectorAll("select.select-pot");
             let allChoicesMade = true;
             if (allSelects.length > 0) {
@@ -586,7 +603,6 @@
                 const correspondingInput = document.querySelector(
                   `input.manual-pot[data-hour='${sel.dataset.hour}'][data-absent='${sel.dataset.absent}']`
                 );
-                // La scelta è fatta se il menu ha un valore OPPURE l'input manuale ha un valore
                 const choiceMade =
                   sel.value ||
                   (correspondingInput && correspondingInput.value.trim());
@@ -605,7 +621,6 @@
                 return;
               }
             }
-            // ======================== FINE MODIFICA ========================
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: "landscape" });
@@ -738,11 +753,11 @@
           if (e.target.closest("#reset-sost-btn")) {
             document.querySelectorAll(".select-pot").forEach((sel) => {
               sel.value = "";
-              sel.disabled = false; // Riabilita i menu
+              sel.disabled = false;
             });
             document
               .querySelectorAll(".manual-pot")
-              .forEach((input) => (input.value = "")); // Svuota i campi manuali
+              .forEach((input) => (input.value = ""));
 
             HOURS.forEach(refreshPotVisibilityForHour);
             document
@@ -771,8 +786,6 @@
           }
         });
 
-        // ======================= INIZIO MODIFICA =======================
-        // Ascoltatore di eventi centralizzato per cambi e input
         document.addEventListener("input", function (e) {
           if (e.target.matches(".manual-pot")) {
             const input = e.target;
@@ -819,7 +832,6 @@
             refreshPotVisibilityForHour(hour);
           }
         });
-        // ======================== FINE MODIFICA ========================
 
         // --- Click su "Leggi dati" ---
         loadBtn.addEventListener("click", async () => {
