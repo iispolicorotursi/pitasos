@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="it">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF--8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PitaSOS</title>
 
@@ -386,6 +386,8 @@
                                   )
                                   .join("")}
                                </select>
+                               <input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." 
+                                      data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
                             </td>`;
                   } else {
                     html += `<td class="text-center">
@@ -485,6 +487,8 @@
                                       )
                                       .join("")}
                                   </select>
+                                  <input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." 
+                                         data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
                                 </td>`;
                       } else {
                         html += `<td class="text-center">
@@ -571,21 +575,29 @@
           HOURS.forEach(refreshPotVisibilityForHour);
         }
 
-        // ======================= INIZIO MODIFICA =======================
         // Ascoltatore di eventi centralizzato per i click
         document.addEventListener("click", function (e) {
-          // --- Logica per il pulsante PDF ---
           if (e.target.closest("#export-pdf-btn")) {
+            // ======================= INIZIO MODIFICA =======================
             const allSelects = document.querySelectorAll("select.select-pot");
-            let allSelected = true;
-            for (const sel of allSelects) {
-              if (!sel.value) {
-                allSelected = false;
-                break;
+            let allChoicesMade = true;
+            if (allSelects.length > 0) {
+              for (const sel of allSelects) {
+                const correspondingInput = document.querySelector(
+                  `input.manual-pot[data-hour='${sel.dataset.hour}'][data-absent='${sel.dataset.absent}']`
+                );
+                // La scelta è fatta se il menu ha un valore OPPURE l'input manuale ha un valore
+                const choiceMade =
+                  sel.value ||
+                  (correspondingInput && correspondingInput.value.trim());
+                if (!choiceMade) {
+                  allChoicesMade = false;
+                  break;
+                }
               }
             }
 
-            if (!allSelected) {
+            if (!allChoicesMade) {
               const userConfirmed = confirm(
                 "Non tutte le scelte sono state effettuate: generare comunque il PDF?"
               );
@@ -593,6 +605,7 @@
                 return;
               }
             }
+            // ======================== FINE MODIFICA ========================
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: "landscape" });
@@ -722,11 +735,15 @@
             }, 3000);
           }
 
-          // --- Logica per il pulsante Reset ---
           if (e.target.closest("#reset-sost-btn")) {
+            document.querySelectorAll(".select-pot").forEach((sel) => {
+              sel.value = "";
+              sel.disabled = false; // Riabilita i menu
+            });
             document
-              .querySelectorAll(".select-pot")
-              .forEach((sel) => (sel.value = ""));
+              .querySelectorAll(".manual-pot")
+              .forEach((input) => (input.value = "")); // Svuota i campi manuali
+
             HOURS.forEach(refreshPotVisibilityForHour);
             document
               .querySelectorAll(`#summary-grid td[data-hour]`)
@@ -754,15 +771,51 @@
           }
         });
 
-        // Ascoltatore di eventi centralizzato per i cambi nei menu a tendina
+        // ======================= INIZIO MODIFICA =======================
+        // Ascoltatore di eventi centralizzato per cambi e input
+        document.addEventListener("input", function (e) {
+          if (e.target.matches(".manual-pot")) {
+            const input = e.target;
+            const absent = input.dataset.absent;
+            const hour = input.dataset.hour;
+            const className = input.dataset.class;
+            const select = document.querySelector(
+              `select.select-pot[data-hour='${hour}'][data-absent='${absent}']`
+            );
+
+            if (input.value.trim()) {
+              if (select) {
+                select.value = "";
+                select.disabled = true;
+              }
+              updateSummaryCell(absent, hour, input.value.trim(), className);
+            } else {
+              if (select) {
+                select.disabled = false;
+              }
+              updateSummaryCell(absent, hour, "", className);
+            }
+            refreshPotVisibilityForHour(hour);
+          }
+        });
+
         document.addEventListener("change", function (e) {
           if (e.target.matches(".select-pot")) {
             const select = e.target;
-            const sostituto = select.value;
             const absent = select.dataset.absent;
             const hour = select.dataset.hour;
             const className = select.dataset.class;
-            updateSummaryCell(absent, hour, sostituto || "", className);
+            const input = document.querySelector(
+              `input.manual-pot[data-hour='${hour}'][data-absent='${absent}']`
+            );
+
+            if (select.value) {
+              if (input) {
+                input.value = "";
+              }
+            }
+
+            updateSummaryCell(absent, hour, select.value || "", className);
             refreshPotVisibilityForHour(hour);
           }
         });
