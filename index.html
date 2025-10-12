@@ -85,7 +85,6 @@
         color: #fff;
       }
 
-      /* --- NUOVO STILE PER L'ETICHETTA DELLA CLASSE --- */
       .class-label {
         font-size: 0.8em;
         font-weight: 700;
@@ -94,7 +93,6 @@
         text-align: center;
         margin-bottom: 0.25rem;
       }
-      /* --- FINE NUOVO STILE --- */
     </style>
   </head>
   <body>
@@ -218,7 +216,6 @@
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "");
 
-        // Ritorna {stato:boolean, compresente: string|null}
         function isCompresenza(
           classe,
           oraInizio,
@@ -254,7 +251,6 @@
             : { stato: false, compresente: null };
         }
 
-        // Inserisce/aggiorna nel riepilogo griglia (Docente × Ore)
         function updateSummaryCell(absent, hour, text, className) {
           const cell = document.querySelector(
             `#summary-grid tbody tr[data-absent="${CSS.escape(
@@ -263,11 +259,9 @@
           );
           if (!cell) return;
           if (!text) {
-            // se vuoto, cancella solo se non è compresenza
             if (!cell.dataset.comp) cell.innerHTML = "";
             return;
           }
-          // se compresenza → corsivo e marca
           if (text.toLowerCase().includes("compresenza")) {
             cell.innerHTML = `<em>${text}</em>`;
             cell.dataset.comp = "1";
@@ -277,7 +271,6 @@
           }
         }
 
-        // Dopo ogni selezione: disabilita lo stesso POT per la stessa ora negli altri select
         function refreshPotVisibilityForHour(hour) {
           const selects = document.querySelectorAll(
             `select[data-hour='${hour}']`
@@ -297,7 +290,6 @@
           });
         }
 
-        // --- Rendering tabelle orizzontali + riepilogo griglia ---
         function displayTables(
           assenzeGiornaliere,
           assenzeOrarie,
@@ -309,7 +301,6 @@
           const m = String(dateObj.getMonth() + 1).padStart(2, "0");
           const a = dateObj.getFullYear();
 
-          // POT del giorno (no COLLETTA O.)
           const potSlots = scheduleData.filter(
             (r) =>
               normalizzaGiorno(r.Giorno || "") ===
@@ -327,7 +318,6 @@
 
           let html = "";
 
-          // ===== ASSENZE GIORNALIERE =====
           html += `
           <div class="card mb-4">
             <div class="card-header bg-primary text-white fw-bold">Assenze giornaliere — ${g}/${m}/${a}</div>
@@ -344,7 +334,6 @@
                 <tbody>
           `;
 
-          // compresenze per il riepilogo iniziale
           const compRows = [];
 
           assenzeGiornaliere.forEach((ag) => {
@@ -375,7 +364,7 @@
                 );
                 if (comp.stato) {
                   const label = `In compresenza${
-                    comp.compresente ? ` (${comp.compresente})` : ""
+                    comp.compresente ? `<br>(${comp.compresente})` : ""
                   }`;
                   html += `<td class="text-center">
                               <div class="class-label">${classe}</div>
@@ -414,7 +403,6 @@
 
           html += `</tbody></table></div></div>`;
 
-          // ===== ASSENZE ORARIE =====
           html += `
           <div class="card mb-4">
             <div class="card-header bg-primary text-white fw-bold">Assenze orarie — ${g}/${m}/${a}</div>
@@ -475,7 +463,7 @@
                     );
                     if (comp.stato) {
                       const label = `In compresenza${
-                        comp.compresente ? ` (${comp.compresente})` : ""
+                        comp.compresente ? `<br>(${comp.compresente})` : ""
                       }`;
                       html += `<td class="text-center">
                                   <div class="class-label">${classe}</div>
@@ -518,8 +506,6 @@
 
           html += `</tbody></table></div></div>`;
 
-          // ===== RIEPILOGO A GRIGLIA (Docente × Ore) =====
-          // set docenti assenti (giornaliere ∪ orarie)
           const allAbsent = Array.from(
             new Set([
               ...assenzeGiornaliere.map((x) => x.nome),
@@ -578,69 +564,35 @@
 
           resultsContainer.innerHTML = html;
 
-          // Precompila il riepilogo con le compresenze rilevate
           compRows.forEach((row) =>
             updateSummaryCell(row.docente, row.ora, row.text)
           );
 
-          // ====== Handlers dei select ======
-          document.querySelectorAll(".select-pot").forEach((sel) => {
-            sel.addEventListener("change", (e) => {
-              const select = e.target;
-              const sostituto = select.value;
-              const absent = select.dataset.absent;
-              const hour = select.dataset.hour;
-              const className = select.dataset.class;
-              // Aggiorna griglia riepilogo
-              updateSummaryCell(absent, hour, sostituto || "", className);
-              // Gestione pot visibilità tra select della stessa ora
-              refreshPotVisibilityForHour(hour);
-            });
-          });
-
-          // Dopo render: applica visibilità iniziale per ogni ora
           HOURS.forEach(refreshPotVisibilityForHour);
+        }
 
-          // ===== Pulsante reset (mantiene compresenze) =====
-          document
-            .getElementById("reset-sost-btn")
-            ?.addEventListener("click", () => {
-              // svuota select
-              document
-                .querySelectorAll(".select-pot")
-                .forEach((sel) => (sel.value = ""));
-              HOURS.forEach(refreshPotVisibilityForHour);
-              // pulisci solo celle non-compresenza
-              document
-                .querySelectorAll(`#summary-grid td[data-hour]`)
-                .forEach((td) => {
-                  if (!td.dataset.comp) td.innerHTML = "";
-                });
+        // ======================= INIZIO MODIFICA =======================
+        // Ascoltatore di eventi centralizzato per i click
+        document.addEventListener("click", function (e) {
+          // --- Logica per il pulsante PDF ---
+          if (e.target.closest("#export-pdf-btn")) {
+            const allSelects = document.querySelectorAll("select.select-pot");
+            let allSelected = true;
+            for (const sel of allSelects) {
+              if (!sel.value) {
+                allSelected = false;
+                break;
+              }
+            }
 
-              // toast
-              const ok = document.createElement("div");
-              ok.className =
-                "alert alert-success text-center mt-3 fade show shadow";
-              ok.style.position = "fixed";
-              ok.style.bottom = "20px";
-              ok.style.left = "50%";
-              ok.style.transform = "translateX(-50%)";
-              ok.style.zIndex = "9999";
-              ok.style.minWidth = "280px";
-              ok.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i> Sostituzioni resettate con successo`;
-              document.body.appendChild(ok);
-              setTimeout(() => {
-                ok.classList.remove("show");
-                ok.classList.add("fade");
-                setTimeout(() => ok.remove(), 400);
-              }, 3000);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            });
-
-          // ===== Pulsante PDF: usa la griglia oraria =====
-          document.addEventListener("click", (e) => {
-            const exportBtn = e.target.closest("#export-pdf-btn");
-            if (!exportBtn) return;
+            if (!allSelected) {
+              const userConfirmed = confirm(
+                "Non tutte le scelte sono state effettuate: generare comunque il PDF?"
+              );
+              if (!userConfirmed) {
+                return;
+              }
+            }
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: "landscape" });
@@ -658,7 +610,6 @@
             doc.setFontSize(14);
 
             const summaryTable = document.getElementById("summary-grid");
-
             if (!summaryTable) {
               alert("Nessuna tabella di riepilogo disponibile per il PDF.");
               return;
@@ -666,12 +617,13 @@
 
             doc.autoTable({
               html: "#summary-grid",
-              startY: 35,
+              startY: 25,
               theme: "grid",
               headStyles: {
                 fillColor: [25, 135, 84],
                 textColor: [255, 255, 255],
                 halign: "center",
+                valign: "middle",
               },
               styles: {
                 fontSize: 10,
@@ -682,21 +634,10 @@
                 halign: "center",
                 valign: "middle",
               },
-              tableWidth: "wrap",
-              columnStyles: {
-                0: { cellWidth: 35 },
-                1: { cellWidth: 35 },
-                2: { cellWidth: 35 },
-                3: { cellWidth: 35 },
-                4: { cellWidth: 35 },
-                5: { cellWidth: 35 },
-                6: { cellWidth: 35 },
-              },
+              tableWidth: "auto",
               tableLineWidth: 0.1,
               didDrawPage: (data) => {
                 const pageWidth = doc.internal.pageSize.getWidth();
-                const pageHeight = doc.internal.pageSize.getHeight();
-
                 doc.setFontSize(14);
                 doc.setTextColor(33, 37, 41);
                 doc.setFont("helvetica", "bold");
@@ -706,21 +647,12 @@
                   15,
                   { align: "center" }
                 );
-
-                const pageCount = doc.getNumberOfPages();
-                const footer = `Pagina ${data.pageNumber} / ${pageCount}`;
-                doc.setFontSize(10);
-                doc.setTextColor(150);
-                const textWidth = doc.getTextWidth(footer);
-                const xCenter = (pageWidth - textWidth) / 2;
-                doc.text(footer, xCenter, pageHeight - 10);
               },
               didParseCell: (data) => {
                 const txt =
                   data.cell.text && data.cell.text[0]
                     ? data.cell.text[0].toLowerCase()
                     : "";
-
                 if (
                   data.section === "head" &&
                   data.column.index === 0 &&
@@ -728,20 +660,15 @@
                 ) {
                   data.cell.text[0] = "Docente assente";
                 }
-
                 if (txt.includes("in compresenza")) {
                   data.cell.styles.fontStyle = "italic";
                   data.cell.styles.textColor = [108, 117, 125];
                 }
-
-                // --- MODIFICA QUI: Aggiunta la condizione per colorare il testo di rosso ---
-                // Colora il testo della colonna "Docente assente" (indice 0) nel corpo (body) della tabella
                 if (data.section === "body" && data.column.index === 0) {
-                  data.cell.styles.textColor = [220, 53, 69]; // Colore rosso (es. #dc3545 di Bootstrap)
+                  data.cell.styles.textColor = [220, 53, 69];
                 }
-                // --- FINE MODIFICA ---
               },
-              margin: { top: 30, left: 10, right: 10 },
+              margin: { top: 20, left: 10, right: 10 },
             });
 
             const notesEl = document.getElementById("notes");
@@ -756,6 +683,19 @@
               doc.setTextColor(90);
               const wrapped = doc.splitTextToSize(notesText, pageWidth - 28);
               doc.text(wrapped, 14, y);
+            }
+
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+              doc.setPage(i);
+              const pageWidth = doc.internal.pageSize.getWidth();
+              const pageHeight = doc.internal.pageSize.getHeight();
+              const footer = `Pagina ${i} / ${pageCount}`;
+              doc.setFontSize(10);
+              doc.setTextColor(150);
+              const textWidth = doc.getTextWidth(footer);
+              const xCenter = (pageWidth - textWidth) / 2;
+              doc.text(footer, xCenter, pageHeight - 10);
             }
 
             const y = String(dateObj.getFullYear());
@@ -780,8 +720,53 @@
               alertDiv.classList.add("fade");
               setTimeout(() => alertDiv.remove(), 400);
             }, 3000);
-          });
-        }
+          }
+
+          // --- Logica per il pulsante Reset ---
+          if (e.target.closest("#reset-sost-btn")) {
+            document
+              .querySelectorAll(".select-pot")
+              .forEach((sel) => (sel.value = ""));
+            HOURS.forEach(refreshPotVisibilityForHour);
+            document
+              .querySelectorAll(`#summary-grid td[data-hour]`)
+              .forEach((td) => {
+                if (!td.dataset.comp) td.innerHTML = "";
+              });
+
+            const ok = document.createElement("div");
+            ok.className =
+              "alert alert-success text-center mt-3 fade show shadow";
+            ok.style.position = "fixed";
+            ok.style.bottom = "20px";
+            ok.style.left = "50%";
+            ok.style.transform = "translateX(-50%)";
+            ok.style.zIndex = "9999";
+            ok.style.minWidth = "280px";
+            ok.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i> Sostituzioni resettate con successo`;
+            document.body.appendChild(ok);
+            setTimeout(() => {
+              ok.classList.remove("show");
+              ok.classList.add("fade");
+              setTimeout(() => ok.remove(), 400);
+            }, 3000);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        });
+
+        // Ascoltatore di eventi centralizzato per i cambi nei menu a tendina
+        document.addEventListener("change", function (e) {
+          if (e.target.matches(".select-pot")) {
+            const select = e.target;
+            const sostituto = select.value;
+            const absent = select.dataset.absent;
+            const hour = select.dataset.hour;
+            const className = select.dataset.class;
+            updateSummaryCell(absent, hour, sostituto || "", className);
+            refreshPotVisibilityForHour(hour);
+          }
+        });
+        // ======================== FINE MODIFICA ========================
 
         // --- Click su "Leggi dati" ---
         loadBtn.addEventListener("click", async () => {
@@ -802,12 +787,25 @@
           const urlAssenze = `${csvBase}${meseFolder}/assenze_${giornoSettimana}-${g}${m}${a}.csv`;
           const urlPermessi = `${csvBase}${meseFolder}/permessi_${giornoSettimana}-${g}${m}${a}.csv`;
 
-          try {
-            const [assenzeCSV, permessiCSV] = await Promise.all([
-              fetchCSV(urlAssenze),
-              fetchCSV(urlPermessi),
-            ]);
+          let assenzeCSV, permessiCSV;
 
+          try {
+            assenzeCSV = await fetchCSV(urlAssenze);
+          } catch (err) {
+            console.error("Errore fetch assenze:", err);
+            resultsContainer.innerHTML = `<div class="alert alert-danger text-center"><strong>Impossibile procedere:</strong> informazioni su assenze giornaliere per la data selezionata non presenti sul server!</div>`;
+            return;
+          }
+
+          try {
+            permessiCSV = await fetchCSV(urlPermessi);
+          } catch (err) {
+            console.error("Errore fetch permessi:", err);
+            resultsContainer.innerHTML = `<div class="alert alert-danger text-center"><strong>Impossibile procedere:</strong> informazioni su assenze orarie per la data selezionata non presenti sul server!</div>`;
+            return;
+          }
+
+          try {
             const assenzeLines = parseCSVText(assenzeCSV);
             const assenzeGiornaliere = assenzeLines.map((raw) => {
               const cleanName = String(raw || "")
@@ -851,8 +849,8 @@
               giornoEsteso
             );
           } catch (err) {
-            console.error(err);
-            resultsContainer.innerHTML = `<div class="alert alert-danger text-center">Errore nella lettura dei file CSV: ${err.message}</div>`;
+            console.error("Errore nel parsing dei dati:", err);
+            resultsContainer.innerHTML = `<div class="alert alert-danger text-center">Errore nell'elaborazione dei dati CSV: ${err.message}</div>`;
           }
         });
       });
