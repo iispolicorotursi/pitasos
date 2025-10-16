@@ -760,7 +760,7 @@
             const y_pdf = String(dateObj.getFullYear());
             const m_pdf = String(dateObj.getMonth() + 1).padStart(2, "0");
             const d_pdf = String(dateObj.getDate()).padStart(2, "0");
-            const pdfFilename = `riepilogo_sostituzioni_${y_pdf}${m_pdf}${d_pdf}.pdf`;
+            const pdfFilename = `riepilogo_sostituzioni_${d_pdf}${m_pdf}${y_pdf}.pdf`;
             doc.save(pdfFilename);
 
             const alertDiv = document.createElement("div");
