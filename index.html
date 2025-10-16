@@ -58,6 +58,7 @@
       .comp-text {
         color: #6c757d;
         font-style: italic;
+        text-align: center;
       }
       .select-pot {
         min-width: 150px;
@@ -74,6 +75,11 @@
         color: #999 !important;
         background-color: #f8f9fa !important;
         font-style: italic;
+      }
+      .comp-text {
+        color: #6c757d;
+        font-style: italic;
+        text-align: center;
       }
     </style>
   </head>
@@ -257,7 +263,7 @@
             cell.innerHTML = `<strong class="text-secondary">POT</strong>`;
             cell.dataset.pot = "1";
           } else if (text.toLowerCase().includes("permesso")) {
-            cell.innerHTML = `<em class="text-info">${text}</em>`;
+            cell.innerHTML = `<em class="comp-text">${text}</em>`;
             cell.dataset.permesso = "1";
           } else {
             cell.innerHTML = `${text}<br>(${className})`;
@@ -470,12 +476,12 @@
                   const classe = lez ? lez.Classe : "-";
 
                   if ((classe || "").trim().toUpperCase() === "POT") {
-                    // Se era in POT, mostra "Permesso Orario"
-                    html += `<td class="text-center"><em class="text-info">(Permesso orario)</em></td>`;
+                    // Mostra "Permesso orario" con lo stesso stile di "In compresenza"
+                    html += `<td class="text-center"><div class="class-label">${classe}</div><div class="text-center">Permesso orario</div></td>`;
                     permessoRows.push({
                       docente,
                       ora: hour,
-                      text: "(Permesso orario)",
+                      text: "Permesso orario",
                     });
                   } else {
                     // Se era in classe, mostra le opzioni di sostituzione
@@ -718,7 +724,7 @@
                 }
                 if (txt.includes("permesso orario")) {
                   data.cell.styles.fontStyle = "italic";
-                  data.cell.styles.textColor = [13, 202, 240];
+                  data.cell.styles.textColor = [108, 117, 125]; // stesso grigio di "In compresenza"
                 }
               },
               margin: { top: 20, left: 10, right: 10 },
