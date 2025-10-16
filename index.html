@@ -70,6 +70,11 @@
         text-align: center;
         margin-bottom: 0.25rem;
       }
+      option:disabled {
+        color: #999 !important;
+        background-color: #f8f9fa !important;
+        font-style: italic;
+      }
     </style>
   </head>
   <body>
@@ -237,31 +242,60 @@
           );
           if (!cell) return;
           if (!text) {
-            if (!cell.dataset.comp) cell.innerHTML = "";
+            if (
+              !cell.dataset.comp &&
+              !cell.dataset.pot &&
+              !cell.dataset.permesso
+            )
+              cell.innerHTML = "";
             return;
           }
           if (text.toLowerCase().includes("compresenza")) {
             cell.innerHTML = `<em>${text}</em>`;
             cell.dataset.comp = "1";
+          } else if (text.toUpperCase() === "POT") {
+            cell.innerHTML = `<strong class="text-secondary">POT</strong>`;
+            cell.dataset.pot = "1";
+          } else if (text.toLowerCase().includes("permesso")) {
+            cell.innerHTML = `<em class="text-info">${text}</em>`;
+            cell.dataset.permesso = "1";
           } else {
             cell.innerHTML = `${text}<br>(${className})`;
             delete cell.dataset.comp;
+            delete cell.dataset.pot;
+            delete cell.dataset.permesso;
           }
         }
 
         function refreshPotVisibilityForHour(hour) {
+          // Tutti i <select> relativi a quell’ora
           const selects = document.querySelectorAll(
             `select[data-hour='${hour}']`
           );
-          const chosen = new Map();
+
+          // Raccogli i nomi dei docenti già scelti (sia tramite select che input manuale)
+          const selectedTeachers = new Set();
+
           selects.forEach((sel) => {
-            if (sel.value) chosen.set(sel.id, sel.value);
+            if (sel.value) selectedTeachers.add(sel.value);
+            const manualInput = sel.parentElement.querySelector(".manual-pot");
+            if (manualInput && manualInput.value.trim()) {
+              selectedTeachers.add(manualInput.value.trim());
+            }
           });
-          const taken = new Set([...chosen.values()]);
+
+          // Ora disabilitiamo dinamicamente le opzioni usate
           selects.forEach((sel) => {
-            const myValue = sel.value;
+            const myValue = sel.value; // il valore del menu corrente
             sel.querySelectorAll("option[data-pot]").forEach((op) => {
-              op.disabled = taken.has(op.value) && op.value !== myValue;
+              // disabilita se scelto da qualcun altro, ma non se è il mio valore attuale
+              if (selectedTeachers.has(op.value) && op.value !== myValue) {
+                op.disabled = true;
+                op.textContent = `${op.value} (occupato)`;
+              } else {
+                op.disabled = false;
+                op.textContent = op.value;
+              }
             });
           });
         }
@@ -291,57 +325,110 @@
 
           const potForHour = (hour, absentTeachersSet) => {
             const [oi, of] = hour.split("-");
+
+            // tutti i docenti che hanno POT in questa ora
             const availableTeachers = potSlots
               .filter((p) => p.OraInizio === oi && p.OraFine === of)
               .map((p) => p.Docente.trim());
-            return availableTeachers.filter(
-              (teacher) => !absentTeachersSet.has(teacher)
-            );
+
+            // Filtriamo i docenti effettivamente indisponibili in questa specifica ora
+            return availableTeachers.filter((teacher) => {
+              // se assente per l'intera giornata → non disponibile
+              if (assenzeGiornaliere.some((a) => a.nome === teacher))
+                return false;
+
+              // se assente orario in questa ora specifica → non disponibile
+              if (
+                assenzeOrarie.some(
+                  (a) =>
+                    a.nome === teacher &&
+                    a.ora
+                      .split(",")
+                      .map((h) => h.trim())
+                      .includes(hour)
+                )
+              )
+                return false;
+
+              // altrimenti disponibile
+              return true;
+            });
           };
 
           let html = `<div class="card mb-4"><div class="card-header bg-primary text-white fw-bold">Assenze giornaliere — ${g}/${m}/${a}</div><div class="table-responsive"><table class="table table-striped table-hover mb-0 align-middle"><thead class="bg-primary text-white"><tr><th class="teacher-cell">Docente assente</th>${HOURS.map(
             (h) => `<th class="hour-col">${h}</th>`
           ).join("")}</tr></thead><tbody>`;
           const compRows = [];
+          const potRows = [];
 
           assenzeGiornaliere.forEach((ag) => {
             const docente = ag.nome;
             const byHour = {};
-            ag.dettagli
-              .filter((d) => (d.Classe || "").trim().toUpperCase() !== "POT")
-              .forEach((d) => {
-                byHour[`${d.OraInizio}-${d.OraFine}`] = {
-                  classe: d.Classe,
-                  Oi: d.OraInizio,
-                  Of: d.OraFine,
-                };
-              });
+            ag.dettagli.forEach((d) => {
+              byHour[`${d.OraInizio}-${d.OraFine}`] = {
+                classe: d.Classe,
+                Oi: d.OraInizio,
+                Of: d.OraFine,
+              };
+            });
             html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td>`;
             HOURS.forEach((hour) => {
               if (byHour[hour]) {
                 const { classe, Oi, Of } = byHour[hour];
-                const comp = isCompresenza(
-                  classe,
-                  Oi,
-                  Of,
-                  docente,
-                  giornoEsteso,
-                  assenzeGiornaliere,
-                  assenzeOrarie
-                );
-                if (comp.stato) {
-                  const label = `In compresenza${
-                    comp.compresente ? `<br>(${comp.compresente})` : ""
-                  }`;
-                  html += `<td class="text-center"><div class="class-label">${classe}</div><div class="comp-text">${label}</div></td>`;
-                  compRows.push({ docente, ora: hour, text: label });
+                if ((classe || "").trim().toUpperCase() === "POT") {
+                  html += `<td class="text-center"><strong class="text-secondary">POT</strong></td>`;
+                  potRows.push({ docente, ora: hour });
                 } else {
-                  const list = potForHour(hour, allAbsentNames);
-                  html += `<td class="text-center"><div class="class-label">${classe}</div><select class="form-select form-select-sm select-pot" data-absent="${docente}" data-hour="${hour}" data-class="${classe}"><option value="">—</option>${list
-                    .map((n) => `<option data-pot value="${n}">${n}</option>`)
-                    .join(
-                      ""
-                    )}</select><input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." data-absent="${docente}" data-hour="${hour}" data-class="${classe}"></td>`;
+                  const comp = isCompresenza(
+                    classe,
+                    Oi,
+                    Of,
+                    docente,
+                    giornoEsteso,
+                    assenzeGiornaliere,
+                    assenzeOrarie
+                  );
+                  if (comp.stato) {
+                    const label = `In compresenza${
+                      comp.compresente ? `<br>(${comp.compresente})` : ""
+                    }`;
+                    html += `<td class="text-center"><div class="class-label">${classe}</div><div class="comp-text">${label}</div></td>`;
+                    compRows.push({ docente, ora: hour, text: label });
+                  } else {
+                    const list = potForHour(hour, allAbsentNames);
+                    const choiceKey = `${docente}|${hour}`;
+                    const savedChoice = savedChoices.get(choiceKey);
+                    if (
+                      list.length > 0 ||
+                      (savedChoice && savedChoice.Tipo === "SOSTITUZIONE")
+                    ) {
+                      let selectValue = "",
+                        inputValue = "",
+                        selectDisabled = false;
+                      if (savedChoice && savedChoice.Tipo === "SOSTITUZIONE") {
+                        if (list.includes(savedChoice.Sostituto)) {
+                          selectValue = savedChoice.Sostituto;
+                        } else {
+                          inputValue = savedChoice.Sostituto;
+                          selectDisabled = true;
+                        }
+                      }
+                      html += `<td class="text-center"><div class="class-label">${classe}</div><select class="form-select form-select-sm select-pot" data-absent="${docente}" data-hour="${hour}" data-class="${classe}" ${
+                        selectDisabled ? "disabled" : ""
+                      }><option value="">—</option>${list
+                        .map(
+                          (n) =>
+                            `<option data-pot value="${n}" ${
+                              n === selectValue ? "selected" : ""
+                            }>${n}</option>`
+                        )
+                        .join(
+                          ""
+                        )}</select><input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." value="${inputValue}" data-absent="${docente}" data-hour="${hour}" data-class="${classe}"></td>`;
+                    } else {
+                      html += `<td class="text-center"><div class="class-label">${classe}</div><span class="text-muted fst-italic">Nessun POT</span></td>`;
+                    }
+                  }
                 }
               } else {
                 html += `<td></td>`;
@@ -354,6 +441,7 @@
           html += `<div class="card mb-4"><div class="card-header bg-primary text-white fw-bold">Assenze orarie — ${g}/${m}/${a}</div><div class="table-responsive"><table class="table table-striped table-hover mb-0 align-middle"><thead class="bg-primary text-white"><tr><th class="teacher-cell">Docente assente</th>${HOURS.map(
             (h) => `<th class="hour-col">${h}</th>`
           ).join("")}</tr></thead><tbody>`;
+          const permessoRows = [];
           if (!assenzeOrarie.length) {
             html += `<tr><td colspan="${
               1 + HOURS.length
@@ -365,25 +453,32 @@
                 .split(",")
                 .map((o) => o.trim())
                 .filter(Boolean);
-              const byHour = {};
-              oreArray.forEach((ora) => {
-                const [oi, of] = ora.split("-");
-                const lez = scheduleData.filter(
-                  (r) =>
-                    normalizzaGiorno(r.Giorno) ===
-                      normalizzaGiorno(giornoEsteso) &&
-                    (r.Docente || "").trim() === docente &&
-                    r.OraInizio === (oi || "").trim() &&
-                    r.OraFine === (of || "").trim()
-                );
-                byHour[ora] = lez.length ? lez[0].Classe : "-";
-              });
               html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td>`;
               HOURS.forEach((hour) => {
-                if (byHour[hour]) {
-                  const classe = byHour[hour];
-                  if (classe !== "-") {
-                    const [oi, of] = hour.split("-");
+                // ======================= INIZIO MODIFICA =======================
+                if (oreArray.includes(hour)) {
+                  // Cerca l'attività del docente in quell'ora
+                  const [oi, of] = hour.split("-");
+                  const lez = scheduleData.find(
+                    (r) =>
+                      normalizzaGiorno(r.Giorno) ===
+                        normalizzaGiorno(giornoEsteso) &&
+                      (r.Docente || "").trim() === docente &&
+                      r.OraInizio === oi &&
+                      r.OraFine === of
+                  );
+                  const classe = lez ? lez.Classe : "-";
+
+                  if ((classe || "").trim().toUpperCase() === "POT") {
+                    // Se era in POT, mostra "Permesso Orario"
+                    html += `<td class="text-center"><em class="text-info">(Permesso orario)</em></td>`;
+                    permessoRows.push({
+                      docente,
+                      ora: hour,
+                      text: "(Permesso orario)",
+                    });
+                  } else {
+                    // Se era in classe, mostra le opzioni di sostituzione
                     const comp = isCompresenza(
                       classe,
                       oi,
@@ -401,20 +496,37 @@
                       compRows.push({ docente, ora: hour, text: label });
                     } else {
                       const list = potForHour(hour, allAbsentNames);
-                      html += `<td class="text-center"><div class="class-label">${classe}</div><select class="form-select form-select-sm select-pot" data-absent="${docente}" data-hour="${hour}" data-class="${classe}"><option value="">—</option>${list
+                      const choiceKey = `${docente}|${hour}`;
+                      const savedChoice = savedChoices.get(choiceKey);
+                      let selectValue = "",
+                        inputValue = "",
+                        selectDisabled = false;
+                      if (savedChoice && savedChoice.Tipo === "SOSTITUZIONE") {
+                        if (list.includes(savedChoice.Sostituto)) {
+                          selectValue = savedChoice.Sostituto;
+                        } else {
+                          inputValue = savedChoice.Sostituto;
+                          selectDisabled = true;
+                        }
+                      }
+                      html += `<td class="text-center"><div class="class-label">${classe}</div><select class="form-select form-select-sm select-pot" data-absent="${docente}" data-hour="${hour}" data-class="${classe}" ${
+                        selectDisabled ? "disabled" : ""
+                      }><option value="">—</option>${list
                         .map(
-                          (n) => `<option data-pot value="${n}">${n}</option>`
+                          (n) =>
+                            `<option data-pot value="${n}" ${
+                              n === selectValue ? "selected" : ""
+                            }>${n}</option>`
                         )
                         .join(
                           ""
-                        )}</select><input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." data-absent="${docente}" data-hour="${hour}" data-class="${classe}"></td>`;
+                        )}</select><input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." value="${inputValue}" data-absent="${docente}" data-hour="${hour}" data-class="${classe}"></td>`;
                     }
-                  } else {
-                    html += `<td><span class="text-muted">-</span></td>`;
                   }
                 } else {
                   html += `<td></td>`;
                 }
+                // ======================== FINE MODIFICA ========================
               });
               html += `</tr>`;
             });
@@ -438,12 +550,33 @@
             )
             .join(
               ""
-            )}</tbody></table></div><div class="mt-3"><label for="notes" class="form-label fw-semibold">Note (opzionali)</label><textarea id="notes" class="form-control" rows="3" placeholder="Scrivi eventuali note..."></textarea></div><div class="d-flex flex-column flex-md-row justify-content-center gap-3 mt-4"><button id="export-pdf-btn" class="btn btn-outline-success px-4 fw-semibold"><i class="bi bi-file-earmark-pdf-fill me-1"></i> Scarica PDF e salva le scelte</button><button id="reset-sost-btn" class="btn btn-outline-danger px-4 fw-semibold"><i class="bi bi-arrow-counterclockwise me-1"></i> Resetta selezioni</button></div></div></div>`;
+            )}</tbody></table></div><div class="mt-3"><label for="notes" class="form-label fw-semibold">Note (opzionali)</label><textarea id="notes" class="form-control" rows="3" placeholder="Scrivi eventuali note..."></textarea></div><div class="d-flex flex-column flex-md-row justify-content-center gap-3 mt-4"><button id="export-pdf-btn" class="btn btn-outline-success px-4 fw-semibold"><i class="bi bi-file-earmark-pdf-fill me-1"></i> Scarica PDF e Salva Riepilogo</button><button id="reset-sost-btn" class="btn btn-outline-danger px-4 fw-semibold"><i class="bi bi-arrow-counterclockwise me-1"></i> Resetta selezioni</button></div></div></div>`;
 
           resultsContainer.innerHTML = html;
           compRows.forEach((row) =>
             updateSummaryCell(row.docente, row.ora, row.text)
           );
+          potRows.forEach((row) =>
+            updateSummaryCell(row.docente, row.ora, "POT", "POT")
+          );
+          permessoRows.forEach((row) =>
+            updateSummaryCell(row.docente, row.ora, row.text)
+          );
+
+          if (savedChoices.size > 0) {
+            savedChoices.forEach((choice, key) => {
+              const [absent, hour] = key.split("|");
+              if (choice.Tipo === "SOSTITUZIONE") {
+                updateSummaryCell(
+                  absent,
+                  hour,
+                  choice.Sostituto,
+                  choice.Classe
+                );
+              }
+            });
+            HOURS.forEach(refreshPotVisibilityForHour);
+          }
         }
 
         async function uploadCsvToServer(csvContent, filename, remotePath) {
@@ -579,6 +712,14 @@
                 if (data.section === "body" && data.column.index === 0) {
                   data.cell.styles.textColor = [220, 53, 69];
                 }
+                if (data.cell.text[0].toUpperCase() === "POT") {
+                  data.cell.styles.fontStyle = "bold";
+                  data.cell.styles.textColor = [108, 117, 125];
+                }
+                if (txt.includes("permesso orario")) {
+                  data.cell.styles.fontStyle = "italic";
+                  data.cell.styles.textColor = [13, 202, 240];
+                }
               },
               margin: { top: 20, left: 10, right: 10 },
             });
@@ -634,26 +775,32 @@
             }, 3000);
 
             let csvContent = "DocenteAssente,Ora,Sostituto,Classe,Tipo\n";
-            const rows = document.querySelectorAll("table.table tbody tr");
-            rows.forEach((row) => {
+            const summaryRows = summaryTable.querySelectorAll("tbody tr");
+            summaryRows.forEach((row) => {
               const absentTeacher = row.cells[0].innerText.trim();
-              const hourCells = row.querySelectorAll("td");
-              hourCells.forEach((cell, index) => {
-                if (index === 0) return;
-                const hour = HOURS[index - 1];
-                const compText = cell.querySelector(".comp-text");
-                const select = cell.querySelector(".select-pot");
-                const manual = cell.querySelector(".manual-pot");
-                const className =
-                  cell.querySelector(".class-label")?.innerText || "";
-                if (compText) {
-                  const compTeacher =
-                    compText.innerHTML.match(/\((.*?)\)/)?.[1] || "";
-                  csvContent += `"${absentTeacher}","${hour}","${compTeacher}","${className}","COMPRESENZA"\n`;
-                } else if (select || manual) {
-                  const substitute =
-                    manual?.value.trim() || select?.value.trim() || "";
-                  if (substitute) {
+              row.querySelectorAll("td[data-hour]").forEach((cell) => {
+                const hour = cell.dataset.hour;
+                const cellContent = cell.innerHTML;
+                if (cellContent) {
+                  if (
+                    cellContent.includes("<em>") &&
+                    cellContent.includes("Permesso orario")
+                  ) {
+                    csvContent += `"${absentTeacher}","${hour}","","","PERMESSO_ORARIO"\n`;
+                  } else if (cellContent.includes("<em>")) {
+                    const compTeacherMatch = cellContent.match(/\((.*?)\)/);
+                    const compTeacher = compTeacherMatch
+                      ? compTeacherMatch[1]
+                      : "";
+                    csvContent += `"${absentTeacher}","${hour}","${compTeacher}","","COMPRESENZA"\n`;
+                  } else if (cellContent.toUpperCase().includes("POT")) {
+                    csvContent += `"${absentTeacher}","${hour}","","POT","POTENZIAMENTO"\n`;
+                  } else {
+                    const parts = cellContent.split("<br>");
+                    const substitute = parts[0].trim();
+                    const className = parts[1]
+                      ? parts[1].replace(/[()]/g, "").trim()
+                      : "";
                     csvContent += `"${absentTeacher}","${hour}","${substitute}","${className}","SOSTITUZIONE"\n`;
                   }
                 }
@@ -681,7 +828,8 @@
             document
               .querySelectorAll(`#summary-grid td[data-hour]`)
               .forEach((td) => {
-                if (!td.dataset.comp) td.innerHTML = "";
+                if (!td.dataset.comp && !td.dataset.pot && !td.dataset.permesso)
+                  td.innerHTML = "";
               });
             const ok = document.createElement("div");
             ok.className =
