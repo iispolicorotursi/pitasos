@@ -179,12 +179,23 @@
           const text = await fetch(orarioFile).then((r) => r.text());
           const lines = text.trim().split("\n");
           const headers = lines[0].split(",").map((h) => h.trim());
+
           scheduleData = lines.slice(1).map((line) => {
             const values = line.split(",");
-            return headers.reduce((o, h, i) => {
+            const obj = headers.reduce((o, h, i) => {
               o[h] = values[i] ? values[i].trim().replace(/^"|"$/g, "") : "";
               return o;
             }, {});
+
+            // 🔍 Riconosci lezioni POT in base al suffisso (P)
+            if (obj.Classe && obj.Classe.endsWith("(P)")) {
+              obj.Classe = obj.Classe.replace("(P)", "").trim(); // rimuovi (P) in visualizzazione
+              obj.isPOT = true; // flag interno
+            } else {
+              obj.isPOT = false;
+            }
+
+            return obj;
           });
         }
 
@@ -321,11 +332,12 @@
             ...assenzeGiornaliere.map((a) => a.nome),
             ...assenzeOrarie.map((a) => a.nome),
           ]);
+          // 🔹 Docenti di potenziamento (da classi con "(P)" nel CSV)
           const potSlots = scheduleData.filter(
             (r) =>
               normalizzaGiorno(r.Giorno || "") ===
                 normalizzaGiorno(giornoEsteso) &&
-              (r.Classe || "").trim().toUpperCase() === "POT" &&
+              r.isPOT === true &&
               (r.Docente || "").trim().toUpperCase() !== "COLLETTA O."
           );
 
