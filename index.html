@@ -444,7 +444,14 @@
                           ""
                         )}</select><input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." value="${inputValue}" data-absent="${docente}" data-hour="${hour}" data-class="${classe}"></td>`;
                     } else {
-                      html += `<td class="text-center"><div class="class-label">${classe}</div><span class="text-muted fst-italic">Nessun POT</span></td>`;
+                      html += `<td class="text-center">
+  <div class="class-label">${classe}</div>
+  <input type="text" class="form-control form-control-sm manual-pot" 
+         placeholder="Manuale..." 
+         data-absent="${docente}" 
+         data-hour="${hour}" 
+         data-class="${classe}">
+</td>`;
                     }
                   }
                 }
