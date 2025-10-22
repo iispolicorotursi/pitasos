@@ -188,9 +188,10 @@
               return o;
             }, {});
 
-            // 🔍 Riconosci lezioni POT in base al suffisso (P)
-            if (obj.Classe && obj.Classe.endsWith("(P)")) {
-              obj.Classe = obj.Classe.replace("(P)", "").trim(); // rimuovi (P) in visualizzazione
+            // 🔍 Riconosci lezioni POT in base al suffisso "(P)" nel nome classe
+            const classeRaw = (obj.Classe || "").trim();
+            if (/\(P\)\s*$/.test(classeRaw)) {
+              obj.Classe = classeRaw.replace(/\(P\)\s*$/, "").trim(); // rimuove (P) per la visualizzazione
               obj.isPOT = true; // flag interno
             } else {
               obj.isPOT = false;
@@ -215,6 +216,60 @@
             .toLowerCase()
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "");
+
+        function isPotenziamentoRow(row) {
+          return /\(P\)\s*$/.test((row.Classe || "").trim());
+        }
+
+        function isDocenteAssente(
+          nome,
+          oraInizio,
+          oraFine,
+          assenzeGiornaliere,
+          assenzeOrarie
+        ) {
+          const nomeTrim = (nome || "").trim();
+          return (
+            assenzeGiornaliere.some((a) => a.nome === nomeTrim) ||
+            assenzeOrarie.some(
+              (a) =>
+                a.nome === nomeTrim && a.ora.includes(`${oraInizio}-${oraFine}`)
+            )
+          );
+        }
+
+        function sameClassCompresenzaAssenti(
+          classe,
+          oraInizio,
+          oraFine,
+          giornoEsteso,
+          assenzeGiornaliere,
+          assenzeOrarie
+        ) {
+          const altri = scheduleData.filter(
+            (r) =>
+              normalizzaGiorno(r.Giorno || "") ===
+                normalizzaGiorno(giornoEsteso) &&
+              r.Classe.replace(/\(P\)/g, "").trim() ===
+                classe.replace(/\(P\)/g, "").trim()
+          );
+          if (altri.length < 2) return false;
+
+          const tuttiAssenti = altri.every((r) =>
+            isDocenteAssente(
+              r.Docente,
+              oraInizio,
+              oraFine,
+              assenzeGiornaliere,
+              assenzeOrarie
+            )
+          );
+
+          const almenoUnoPOT = altri.some((r) => r.isPOT);
+          const almenoUnoNonPOT = altri.some((r) => !r.isPOT);
+
+          return tuttiAssenti && almenoUnoPOT && almenoUnoNonPOT;
+        }
 
         function isCompresenza(
           classe,
@@ -394,66 +449,122 @@
             HOURS.forEach((hour) => {
               if (byHour[hour]) {
                 const { classe, Oi, Of } = byHour[hour];
-                if ((classe || "").trim().toUpperCase() === "POT") {
-                  html += `<td class="text-center"><strong class="text-secondary">POT</strong></td>`;
-                  potRows.push({ docente, ora: hour });
-                } else {
-                  const comp = isCompresenza(
-                    classe,
-                    Oi,
-                    Of,
-                    docente,
-                    giornoEsteso,
-                    assenzeGiornaliere,
-                    assenzeOrarie
+
+                // 🔍 1️⃣ Verifica se il docente è di potenziamento (P)
+                const docenteRow = scheduleData.find(
+                  (r) =>
+                    normalizzaGiorno(r.Giorno || "") ===
+                      normalizzaGiorno(giornoEsteso) &&
+                    (r.Docente || "").trim() === docente &&
+                    r.OraInizio === Oi &&
+                    r.OraFine === Of
+                );
+
+                if (docenteRow && docenteRow.isPOT) {
+                  // 🔎 Controlla se nella stessa ora/classe c'è un curricolare
+                  const curricolariPresenti = scheduleData.filter(
+                    (r) =>
+                      normalizzaGiorno(r.Giorno || "") ===
+                        normalizzaGiorno(giornoEsteso) &&
+                      r.OraInizio === Oi &&
+                      r.OraFine === Of &&
+                      r.Docente.trim() !== docente.trim() &&
+                      !r.isPOT &&
+                      r.Classe.replace(/\(P\)/g, "").trim() ===
+                        classe.replace(/\(P\)/g, "").trim()
                   );
-                  if (comp.stato) {
-                    const label = `In compresenza${
-                      comp.compresente ? `<br>(${comp.compresente})` : ""
-                    }`;
-                    html += `<td class="text-center"><div class="class-label">${classe}</div><div class="comp-text">${label}</div></td>`;
-                    compRows.push({ docente, ora: hour, text: label });
-                  } else {
-                    const list = potForHour(hour, allAbsentNames);
-                    const choiceKey = `${docente}|${hour}`;
-                    const savedChoice = savedChoices.get(choiceKey);
-                    if (
-                      list.length > 0 ||
-                      (savedChoice && savedChoice.Tipo === "SOSTITUZIONE")
-                    ) {
-                      let selectValue = "",
-                        inputValue = "",
-                        selectDisabled = false;
-                      if (savedChoice && savedChoice.Tipo === "SOSTITUZIONE") {
-                        if (list.includes(savedChoice.Sostituto)) {
-                          selectValue = savedChoice.Sostituto;
-                        } else {
-                          inputValue = savedChoice.Sostituto;
-                          selectDisabled = true;
-                        }
-                      }
-                      html += `<td class="text-center"><div class="class-label">${classe}</div><select class="form-select form-select-sm select-pot" data-absent="${docente}" data-hour="${hour}" data-class="${classe}" ${
-                        selectDisabled ? "disabled" : ""
-                      }><option value="">—</option>${list
-                        .map(
-                          (n) =>
-                            `<option data-pot value="${n}" ${
-                              n === selectValue ? "selected" : ""
-                            }>${n}</option>`
-                        )
-                        .join(
-                          ""
-                        )}</select><input type="text" class="form-control form-control-sm mt-1 manual-pot" placeholder="Manuale..." value="${inputValue}" data-absent="${docente}" data-hour="${hour}" data-class="${classe}"></td>`;
+
+                  if (curricolariPresenti.length > 0) {
+                    // 🔹 Se esiste almeno un curricolare, non sostituire il docente di potenziamento
+                    html += `<td class="text-center">
+                  <div class="class-label">${classe}</div>
+                  <div class="comp-text">In compresenza</div>
+                </td>`;
+                    compRows.push({
+                      docente,
+                      ora: hour,
+                      text: "In compresenza",
+                    });
+                    return; // passa alla prossima ora
+                  }
+                }
+
+                // 🔍 2️⃣ Se non è potenziamento, procedi con la normale logica di compresenza o sostituzione
+                const comp = isCompresenza(
+                  classe,
+                  Oi,
+                  Of,
+                  docente,
+                  giornoEsteso,
+                  assenzeGiornaliere,
+                  assenzeOrarie
+                );
+
+                if (comp.stato) {
+                  const label = `In compresenza${
+                    comp.compresente ? `<br>(${comp.compresente})` : ""
+                  }`;
+                  html += `<td class="text-center">
+                <div class="class-label">${classe}</div>
+                <div class="comp-text">${label}</div>
+              </td>`;
+                  compRows.push({ docente, ora: hour, text: label });
+                } else {
+                  // 🔹 Elenco docenti POT disponibili per quell'ora
+                  const list = potForHour(hour, allAbsentNames);
+                  const choiceKey = `${docente}|${hour}`;
+                  const savedChoice = savedChoices.get(choiceKey);
+                  let selectValue = "",
+                    inputValue = "",
+                    selectDisabled = false;
+
+                  if (savedChoice && savedChoice.Tipo === "SOSTITUZIONE") {
+                    if (list.includes(savedChoice.Sostituto)) {
+                      selectValue = savedChoice.Sostituto;
                     } else {
-                      html += `<td class="text-center">
-  <div class="class-label">${classe}</div>
-  <input type="text" class="form-control form-control-sm manual-pot" 
-         placeholder="Manuale..." 
-         data-absent="${docente}" 
-         data-hour="${hour}" 
-         data-class="${classe}">
-</td>`;
+                      inputValue = savedChoice.Sostituto;
+                      selectDisabled = true;
                     }
+                  }
+
+                  // 🔹 Se ci sono POT disponibili → menu a tendina
+                  if (list.length > 0) {
+                    html += `<td class="text-center">
+                  <div class="class-label">${classe}</div>
+                  <select class="form-select form-select-sm select-pot"
+                          data-absent="${docente}"
+                          data-hour="${hour}"
+                          data-class="${classe}"
+                          ${selectDisabled ? "disabled" : ""}>
+                    <option value="">—</option>
+                    ${list
+                      .map(
+                        (n) =>
+                          `<option data-pot value="${n}" ${
+                            n === selectValue ? "selected" : ""
+                          }>${n}</option>`
+                      )
+                      .join("")}
+                  </select>
+                  <input type="text"
+                         class="form-control form-control-sm mt-1 manual-pot"
+                         placeholder="Manuale..."
+                         value="${inputValue}"
+                         data-absent="${docente}"
+                         data-hour="${hour}"
+                         data-class="${classe}">
+                </td>`;
+                  } else {
+                    // 🔹 Nessun POT disponibile → campo manuale (non scritta "Nessun POT")
+                    html += `<td class="text-center">
+                  <div class="class-label">${classe}</div>
+                  <input type="text"
+                         class="form-control form-control-sm manual-pot"
+                         placeholder="Manuale..."
+                         data-absent="${docente}"
+                         data-hour="${hour}"
+                         data-class="${classe}">
+                </td>`;
                   }
                 }
               } else {
