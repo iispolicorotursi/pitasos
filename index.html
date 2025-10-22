@@ -54,6 +54,7 @@
       }
       .hour-col {
         width: 120px;
+        text-align: center;
       }
       .comp-text {
         color: #6c757d;
@@ -588,19 +589,96 @@
             updateSummaryCell(row.docente, row.ora, row.text)
           );
 
-          if (savedChoices.size > 0) {
-            savedChoices.forEach((choice, key) => {
-              const [absent, hour] = key.split("|");
-              if (choice.Tipo === "SOSTITUZIONE") {
-                updateSummaryCell(
-                  absent,
-                  hour,
-                  choice.Sostituto,
-                  choice.Classe
+          if (savedChoices && savedChoices.size > 0) {
+            // Aspetta che tutto il DOM (tabelle e select) sia davvero pronto
+            const ripristina = () => {
+              console.groupCollapsed("🔁 Ripristino sostituzioni salvate");
+
+              savedChoices.forEach((choice, key) => {
+                const [absentRaw, hourRaw] = key.split("|");
+                const {
+                  Sostituto,
+                  Classe,
+                  Tipo,
+                  Origine = "SELECT",
+                  Disabled = false,
+                } = choice;
+
+                // Trova i controlli corrispondenti nell’interfaccia
+                const select = document.querySelector(
+                  `select[data-absent="${CSS.escape(
+                    absentRaw
+                  )}"][data-hour="${hourRaw}"]`
                 );
+                const input = document.querySelector(
+                  `input[data-absent="${CSS.escape(
+                    absentRaw
+                  )}"][data-hour="${hourRaw}"]`
+                );
+
+                // Ripristina SOSTITUZIONI manuali o da menu
+                if (Tipo === "SOSTITUZIONE" && Sostituto) {
+                  if (Origine === "SELECT" && select) {
+                    select.value = Sostituto;
+                    if (input) input.value = "";
+                  } else if (Origine === "MANUAL" && input) {
+                    input.value = Sostituto;
+                    if (Disabled && select) select.disabled = true;
+                  }
+
+                  // ✅ Aggiorna la tabella riepilogo
+                  updateSummaryCell(absentRaw, hourRaw, Sostituto, Classe);
+                }
+
+                // ✅ Gestione altre tipologie
+                if (Tipo === "COMPRESENZA") {
+                  const compName =
+                    Sostituto && !/in compresenza/i.test(Sostituto)
+                      ? ` (${Sostituto})`
+                      : "";
+                  const text = `In compresenza${compName}`;
+                  updateSummaryCell(absentRaw, hourRaw, text, Classe);
+                }
+                if (Tipo === "PERMESSO_ORARIO") {
+                  updateSummaryCell(absentRaw, hourRaw, "Permesso orario", "");
+                }
+                if (Tipo === "POTENZIAMENTO") {
+                  updateSummaryCell(absentRaw, hourRaw, "POT", "POT");
+                }
+              });
+
+              console.groupEnd();
+              HOURS.forEach(refreshPotVisibilityForHour);
+
+              // Messaggio visivo di conferma
+              const alert = document.createElement("div");
+              alert.className =
+                "alert alert-primary text-center mt-3 fade show shadow";
+              alert.style.position = "fixed";
+              alert.style.bottom = "20px";
+              alert.style.left = "50%";
+              alert.style.transform = "translateX(-50%)";
+              alert.style.zIndex = "9999";
+              alert.style.minWidth = "300px";
+              alert.innerHTML = `<i class="bi bi-arrow-clockwise me-2"></i> Riepilogo precedente ripristinato`;
+              document.body.appendChild(alert);
+              setTimeout(() => {
+                alert.classList.remove("show");
+                alert.classList.add("fade");
+                setTimeout(() => alert.remove(), 400);
+              }, 3000);
+            };
+
+            // Attendi fino a che tutte le select non sono nel DOM
+            const interval = setInterval(() => {
+              const total = document.querySelectorAll(
+                "select[data-absent]"
+              ).length;
+              if (total > 0) {
+                clearInterval(interval);
+                setTimeout(ripristina, 400); // attesa extra per sicurezza
               }
-            });
-            HOURS.forEach(refreshPotVisibilityForHour);
+            }, 300);
           }
         }
 
@@ -799,36 +877,49 @@
               setTimeout(() => alertDiv.remove(), 400);
             }, 3000);
 
-            let csvContent = "DocenteAssente,Ora,Sostituto,Classe,Tipo\n";
+            let csvContent =
+              "DocenteAssente,Ora,Sostituto,Classe,Tipo,Origine,Disabled\n";
+
             const summaryRows = summaryTable.querySelectorAll("tbody tr");
+
             summaryRows.forEach((row) => {
               const absentTeacher = row.cells[0].innerText.trim();
               row.querySelectorAll("td[data-hour]").forEach((cell) => {
                 const hour = cell.dataset.hour;
-                const cellContent = cell.innerHTML;
-                if (cellContent) {
-                  if (
-                    cellContent.includes("<em>") &&
-                    cellContent.includes("Permesso orario")
-                  ) {
-                    csvContent += `"${absentTeacher}","${hour}","","","PERMESSO_ORARIO"\n`;
-                  } else if (cellContent.includes("<em>")) {
-                    const compTeacherMatch = cellContent.match(/\((.*?)\)/);
-                    const compTeacher = compTeacherMatch
-                      ? compTeacherMatch[1]
-                      : "";
-                    csvContent += `"${absentTeacher}","${hour}","${compTeacher}","","COMPRESENZA"\n`;
-                  } else if (cellContent.toUpperCase().includes("POT")) {
-                    csvContent += `"${absentTeacher}","${hour}","","POT","POTENZIAMENTO"\n`;
-                  } else {
-                    const parts = cellContent.split("<br>");
-                    const substitute = parts[0].trim();
-                    const className = parts[1]
-                      ? parts[1].replace(/[()]/g, "").trim()
-                      : "";
-                    csvContent += `"${absentTeacher}","${hour}","${substitute}","${className}","SOSTITUZIONE"\n`;
-                  }
-                }
+                const cellContent = cell.innerHTML.trim();
+                if (!cellContent) return;
+
+                let tipo = "SOSTITUZIONE";
+                let origine = "";
+                let disabled = "FALSE";
+                let sostituto = "";
+                let className = "";
+
+                if (cellContent.includes("Permesso orario"))
+                  tipo = "PERMESSO_ORARIO";
+                if (cellContent.includes("POT")) tipo = "POTENZIAMENTO";
+                if (cellContent.toLowerCase().includes("in compresenza"))
+                  tipo = "COMPRESENZA";
+
+                const parts = cellContent.split("<br>");
+                sostituto = parts[0].replace(/<.*?>/g, "").trim();
+                if (parts[1]) className = parts[1].replace(/[()]/g, "").trim();
+
+                // Determina origine e disabilitazione dal DOM
+                const select = document.querySelector(
+                  `select[data-absent='${absentTeacher}'][data-hour='${hour}']`
+                );
+                const input = document.querySelector(
+                  `input.manual-pot[data-absent='${absentTeacher}'][data-hour='${hour}']`
+                );
+
+                if (select && select.value) origine = "SELECT";
+                else if (input && input.value.trim()) origine = "MANUAL";
+                else origine = "AUTO";
+
+                if (select && select.disabled) disabled = "TRUE";
+
+                csvContent += `"${absentTeacher}","${hour}","${sostituto}","${className}","${tipo}","${origine}","${disabled}"\n`;
               });
             });
 
@@ -949,6 +1040,9 @@
 
           try {
             const sostituzioniCSV = await fetchCSV(urlSostituzioni);
+            if (!sostituzioniCSV.trim() || sostituzioniCSV.startsWith("<")) {
+              throw new Error("File CSV non valido o vuoto.");
+            }
             if (
               confirm(
                 "È stato trovato un salvataggio precedente per questa data. Vuoi ripristinarlo?"
@@ -961,12 +1055,22 @@
                   .map((v) =>
                     v.replace(/^"|"$/g, "").replace(/""/g, '"').trim()
                   );
-                if (values.length === 5) {
-                  const [docente, ora, sostituto, classe, tipo] = values;
-                  savedChoices.set(`${docente}|${ora}`, {
-                    Sostituto: sostituto,
-                    Classe: classe,
-                    Tipo: tipo,
+                if (values.length >= 7) {
+                  const [
+                    Docente,
+                    Ora,
+                    Sostituto,
+                    Classe,
+                    Tipo,
+                    Origine,
+                    Disabled,
+                  ] = values;
+                  savedChoices.set(`${Docente}|${Ora}`, {
+                    Sostituto,
+                    Classe,
+                    Tipo,
+                    Origine,
+                    Disabled: Disabled === "TRUE",
                   });
                 }
               });
