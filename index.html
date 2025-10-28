@@ -394,7 +394,10 @@
               normalizzaGiorno(r.Giorno || "") ===
                 normalizzaGiorno(giornoEsteso) &&
               r.isPOT === true &&
-              (r.Docente || "").trim().toUpperCase() !== "COLLETTA O."
+              (r.Docente || "").trim().toUpperCase() !== "COLLETTA O." &&
+              (r.Docente || "").trim().toUpperCase() !== "RINA T." &&
+              (r.Docente || "").trim().toUpperCase() !== "BATTIFARANO C." &&
+              (r.Docente || "").trim().toUpperCase() !== "BRUNO E."
           );
 
           const potForHour = (hour, absentTeachersSet) => {
