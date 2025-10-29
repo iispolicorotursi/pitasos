@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PitaSOS</title>
+
+    <!-- Bootstrap -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
+
+    <!-- Font -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+      body {
+        font-family: "Nunito", sans-serif;
+        background-color: #f8f9fa;
+        padding: 1rem;
+      }
+      .main-container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 {
+        text-align: center;
+        font-weight: 700;
+        color: #0d6efd;
+        margin-bottom: 1.5rem;
+      }
+      .card {
+        border-radius: 1rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      }
+      .table th,
+      .table td {
+        vertical-align: middle !important;
+      }
+      .table thead th {
+        white-space: nowrap;
+      }
+      .teacher-cell {
+        width: 240px;
+      }
+      .hour-col {
+        width: 130px;
+        text-align: center;
+      }
+      .hour-col .form-select,
+      .hour-col .form-control {
+        text-align: left;
+      }
+      .comp-text,
+      .perm-text {
+        color: #6c757d;
+        font-style: italic;
+      }
+      .select-pot {
+        min-width: 150px;
+      }
+      .class-label {
+        font-size: 0.8em;
+        font-weight: 700;
+        color: #6c757d;
+        display: block;
+        text-align: center;
+        margin-bottom: 0.25rem;
+      }
+      .sticky-helpers {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #f8f9fa;
+        padding-top: 0.25rem;
+      }
+      .search-input {
+        max-width: 420px;
+      }
+      .muted-badge {
+        font-size: 0.8rem;
+      }
+      .toast-like {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;
+        min-width: 280px;
+      }
+
+      .is-invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 0.15rem rgba(220, 53, 69, 0.25) !important;
+      }
+      td.needs-attention {
+        background-color: #fff3f3 !important; /* leggero rosato */
+      }
+    </style>
+  </head>
+  <body>
+    <div class="main-container">
+      <!-- Intestazione -->
+      <div class="text-center mt-4 mb-4">
+        <i
+          class="bi bi-person-lines-fill text-primary"
+          style="font-size: 3rem"
+        ></i>
+        <h1 class="fw-bold mb-1 mt-2">PitaSOS</h1>
+        <p class="text-muted fst-italic mb-0">
+          Versione per chi si occupa delle sostituzioni
+        </p>
+      </div>
+
+      <!-- Selezione Data -->
+      <div class="card mb-3">
+        <div class="card-header bg-primary text-white fw-semibold">
+          1. Seleziona la data
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-column flex-md-row align-items-md-end gap-3">
+            <div class="flex-fill">
+              <label for="date-input" class="form-label fw-semibold"
+                >Data:</label
+              >
+              <input type="date" class="form-control" id="date-input" />
+            </div>
+            <div>
+              <button id="load-btn" class="btn btn-primary px-4">
+                <i class="bi bi-arrow-repeat"></i> Ricarica / Ripristina
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEZIONE 1: Scelta assenti in pagina -->
+      <div class="card mb-4">
+        <div class="card-header bg-secondary text-white fw-bold">
+          2. Seleziona i docenti assenti (in pagina)
+        </div>
+        <div class="card-body">
+          <div class="row g-4">
+            <!-- Assenze giornaliere -->
+            <div class="col-lg-6">
+              <h5 class="fw-bold mb-2">Assenze giornaliere</h5>
+              <div class="sticky-helpers d-flex align-items-center gap-2 mb-2">
+                <input
+                  id="search-daily"
+                  type="search"
+                  class="form-control form-control-sm search-input"
+                  placeholder="Cerca docente..."
+                />
+              </div>
+              <div
+                id="daily-absent-list"
+                class="border rounded p-2"
+                style="max-height: 340px; overflow: auto"
+              ></div>
+            </div>
+
+            <!-- Assenze orarie -->
+            <div class="col-lg-6">
+              <h5 class="fw-bold mb-2">Assenze orarie</h5>
+              <div class="sticky-helpers d-flex align-items-center gap-2 mb-2">
+                <select
+                  id="hourly-teacher-select"
+                  class="form-select form-select-sm search-input"
+                ></select>
+                <span class="badge text-bg-light muted-badge">
+                  <i class="bi bi-clock-history me-1"></i> Seleziona il docente
+                  e spunta le ore di assenza
+                </span>
+              </div>
+              <div class="border rounded p-3">
+                <div
+                  class="row row-cols-2 row-cols-md-3 g-2"
+                  id="hourly-hours-grid"
+                >
+                  <!-- check ore qui -->
+                </div>
+                <div class="mt-3 small text-muted" id="hourly-selection-hint">
+                  Seleziona un docente dall’elenco per impostare le ore di
+                  assenza.
+                </div>
+              </div>
+              <div class="mt-3">
+                <h6 class="fw-semibold">
+                  Riepilogo assenze orarie selezionate
+                </h6>
+                <div
+                  id="hourly-summary"
+                  class="border rounded p-2"
+                  style="max-height: 180px; overflow: auto"
+                >
+                  <span class="text-muted fst-italic">Nessuna selezione.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEZIONE 2: Proposte sostituzioni + riepilogo + PDF -->
+      <div id="results-container">
+        <div class="alert alert-info text-center mb-0">
+          I risultati verranno mostrati qui dopo la selezione degli assenti.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // ====== COSTANTI E STATO ======
+        const HOURS = [
+          "08:00-09:00",
+          "09:00-10:00",
+          "10:00-11:00",
+          "11:00-12:00",
+          "12:00-13:00",
+          "13:00-14:00",
+        ];
+
+        const BANNED = new Set([
+          "COLLETTA O.",
+          "RINA T.",
+          "BRUNO E.",
+          "BATTIFARANO C.",
+        ]);
+
+        const dateInput = document.getElementById("date-input");
+        const loadBtn = document.getElementById("load-btn");
+        const resultsContainer = document.getElementById("results-container");
+
+        // Sezione 1
+        const dailyListEl = document.getElementById("daily-absent-list");
+        const searchDailyEl = document.getElementById("search-daily");
+        const hourlySelectEl = document.getElementById("hourly-teacher-select");
+        const hourlyGridEl = document.getElementById("hourly-hours-grid");
+        const hourlyHintEl = document.getElementById("hourly-selection-hint");
+        const hourlySummaryEl = document.getElementById("hourly-summary");
+
+        const remoteBaseUrl = "https://progetti.antoniofittipaldi.it/";
+        const csvDataPath = "pitasos/";
+        const phpScriptUrl = remoteBaseUrl + "pitasos/salva_sostituzioni.php";
+
+        const corsProxy = "https://api.allorigins.win/raw?url=";
+        const orarioFile = "orario.csv";
+        const abbrevMap = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+        const giorniEstesi = [
+          "Domenica",
+          "Lunedì",
+          "Martedì",
+          "Mercoledì",
+          "Giovedì",
+          "Venerdì",
+          "Sabato",
+        ];
+
+        let scheduleData = []; // righe orario
+        let allTeachers = []; // tutti i docenti (da orario)
+        let dailyAbsent = new Set(); // assenti full day
+        let hourlyAbsent = new Map(); // nome -> Set(ore)
+        let restoring = false; // flag durante ripristino per evitare rimbalzi
+        let restoredChoices = new Map();
+
+        // Data odierna di default
+        const oggi = new Date();
+        dateInput.value = `${oggi.getFullYear()}-${String(
+          oggi.getMonth() + 1
+        ).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
+
+        // ====== UTILS ======
+        async function fetchCSV(url) {
+          // 1) prova diretta
+          try {
+            const r = await fetch(url, { cache: "no-store" });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const txt = await r.text();
+            // vuoto trattato come errore
+            if (!txt || !txt.trim().length) throw new Error("empty");
+            return txt;
+          } catch {
+            // 2) prova via proxy
+            const p = await fetch(corsProxy + encodeURIComponent(url), {
+              cache: "no-store",
+            });
+            if (!p.ok) throw new Error(`Proxy ${p.status}`);
+            const txt = await p.text();
+            if (!txt || !txt.trim().length) throw new Error("empty");
+            return txt;
+          }
+        }
+
+        async function loadOrario() {
+          const text = await fetch(orarioFile, { cache: "no-store" }).then(
+            (r) => r.text()
+          );
+          const lines = text.trim().split("\n");
+          const headers = lines[0].split(",").map((h) => h.trim());
+          scheduleData = lines.slice(1).map((line) => {
+            const values = line.split(",");
+            const obj = headers.reduce((o, h, i) => {
+              o[h] = values[i] ? values[i].trim().replace(/^"|"$/g, "") : "";
+              return o;
+            }, {});
+            // Riconosci lezioni POT in base al suffisso (P) nel campo Classe
+            if (obj.Classe && /\(P\)\s*$/.test(obj.Classe)) {
+              obj.Classe = obj.Classe.replace(/\(P\)\s*$/, "").trim(); // rimuovi (P) in visualizzazione
+              obj.isPOT = true; // flag interno
+            } else {
+              obj.isPOT = false;
+            }
+            return obj;
+          });
+
+          const teacherNames = scheduleData
+            .map((r) => (r.Docente || "").trim())
+            .filter(Boolean);
+          allTeachers = [...new Set(teacherNames)]
+            .filter((n) => !BANNED.has(n))
+            .sort((a, b) => a.localeCompare(b));
+        }
+
+        const normalizzaGiorno = (g) =>
+          (g || "")
+            .toString()
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+
+        // Ritorna le ore (array tipo ["08:00-09:00", ...]) in cui il docente è a orario nel giorno scelto
+        function getTeacherHoursOnDate(teacherName, selectedDateStr) {
+          if (!Array.isArray(scheduleData) || !teacherName || !selectedDateStr)
+            return [];
+          const d = new Date(selectedDateStr);
+          // Attenzione: la tua app usa spesso getUTCDay() per coerenza con i CSV
+          const giorniEstesi = [
+            "Domenica",
+            "Lunedì",
+            "Martedì",
+            "Mercoledì",
+            "Giovedì",
+            "Venerdì",
+            "Sabato",
+          ];
+          const giornoEsteso = giorniEstesi[d.getUTCDay()];
+          const wanted = [];
+
+          for (const r of scheduleData) {
+            if (!r) continue;
+            const doc = (r.Docente || "").trim();
+            const day = normalizzaGiorno(r.Giorno || "");
+            if (doc === teacherName && day === normalizzaGiorno(giornoEsteso)) {
+              const oi = (r.OraInizio || "").trim();
+              const of = (r.OraFine || "").trim();
+              if (oi && of) wanted.push(`${oi}-${of}`);
+            }
+          }
+          // dedup + ordine per ora
+          return [...new Set(wanted)].sort((a, b) => a.localeCompare(b));
+        }
+
+        function showToast(html, cls = "alert-success") {
+          const div = document.createElement("div");
+          div.className = `alert ${cls} text-center mt-3 fade show shadow toast-like`;
+          div.innerHTML = html;
+          document.body.appendChild(div);
+          setTimeout(() => {
+            div.classList.remove("show");
+            div.classList.add("fade");
+            setTimeout(() => div.remove(), 400);
+          }, 3000);
+        }
+
+        // dopo la definizione di showToast(...)
+        window.showToast = showToast;
+
+        // ====== SEZIONE 1: BUILD UI ======
+        function buildDailyList(filter = "") {
+          const q = filter.trim().toLowerCase();
+          const giornoEsteso =
+            giorniEstesi[new Date(dateInput.value).getUTCDay()];
+          const todayTeachers = [
+            ...new Set(
+              scheduleData
+                .filter(
+                  (r) =>
+                    normalizzaGiorno(r.Giorno) ===
+                    normalizzaGiorno(giornoEsteso)
+                )
+                .map((r) => (r.Docente || "").trim())
+                .filter(Boolean)
+            ),
+          ]
+            .filter((n) => !BANNED.has(n))
+            .sort((a, b) => a.localeCompare(b));
+
+          dailyListEl.innerHTML = "";
+          todayTeachers
+            .filter((n) => !q || n.toLowerCase().includes(q))
+            .forEach((name, idx) => {
+              const id = `daily-${idx}`;
+              const checked = dailyAbsent.has(name) ? "checked" : "";
+              const item = document.createElement("div");
+              item.className = "form-check";
+              item.innerHTML = `
+                <input class="form-check-input daily-absent" type="checkbox" id="${id}" value="${name}" ${checked}>
+                <label class="form-check-label" for="${id}">
+                  <i class="bi bi-person-fill text-primary me-1"></i>${name}
+                </label>
+              `;
+              dailyListEl.appendChild(item);
+            });
+
+          // Bind
+          dailyListEl.querySelectorAll(".daily-absent").forEach((cb) => {
+            cb.addEventListener("change", () => {
+              const name = cb.value;
+              if (cb.checked) {
+                dailyAbsent.add(name);
+                // rimuovi da orarie
+                hourlyAbsent.delete(name);
+                // aggiorna UI hourly
+                buildHourlyTeacherSelect();
+                buildHourlyGrid(); // reset griglia ore
+                renderHourlySummary();
+              } else {
+                dailyAbsent.delete(name);
+                buildHourlyTeacherSelect();
+              }
+              if (!restoring) {
+                // ricalcola subito sezione 2
+                renderSubstitutionTables();
+              }
+            });
+          });
+        }
+
+        function buildHourlyTeacherSelect() {
+          const giornoEsteso =
+            giorniEstesi[new Date(dateInput.value).getUTCDay()];
+          const todayTeachers = [
+            ...new Set(
+              scheduleData
+                .filter(
+                  (r) =>
+                    normalizzaGiorno(r.Giorno) ===
+                    normalizzaGiorno(giornoEsteso)
+                )
+                .map((r) => (r.Docente || "").trim())
+                .filter(Boolean)
+            ),
+          ]
+            .filter((n) => !BANNED.has(n))
+            .sort((a, b) => a.localeCompare(b));
+
+          const available = todayTeachers.filter((n) => !dailyAbsent.has(n));
+
+          hourlySelectEl.innerHTML =
+            `<option value="">— Seleziona docente —</option>` +
+            available.map((n) => `<option value="${n}">${n}</option>`).join("");
+
+          // se il docente selezionato era stato bannato o passato a daily absent, svuota griglia
+          if (
+            hourlySelectEl.value &&
+            !available.includes(hourlySelectEl.value)
+          ) {
+            hourlySelectEl.value = "";
+            buildHourlyGrid();
+            renderHourlySummary();
+          }
+        }
+
+        function buildHourlyGrid() {
+          hourlyGridEl.innerHTML = "";
+          const name = hourlySelectEl.value;
+          if (!name) {
+            hourlyHintEl.classList.remove("d-none");
+            return;
+          }
+          hourlyHintEl.classList.add("d-none");
+
+          // 🔸 Calcola solo le ore effettive del docente in quel giorno
+          const allowedHours = getTeacherHoursOnDate(name, dateInput.value);
+
+          // Se il docente non ha ore in orario in quel giorno
+          if (allowedHours.length === 0) {
+            hourlyGridEl.innerHTML = `<div class="text-muted fst-italic">Nessuna ora disponibile per questo docente nella data selezionata.</div>`;
+            return;
+          }
+
+          const selectedSet = hourlyAbsent.get(name) || new Set();
+          allowedHours.forEach((h, i) => {
+            const id = `h-${i}`;
+            const checked = selectedSet.has(h) ? "checked" : "";
+            const box = document.createElement("div");
+            box.className = "form-check";
+            box.innerHTML = `
+    <input class="form-check-input hourly-box" type="checkbox" id="${id}" data-teacher="${name}" data-hour="${h}" ${checked}>
+    <label class="form-check-label" for="${id}">${h}</label>
+  `;
+            hourlyGridEl.appendChild(box);
+          });
+
+          hourlyGridEl.querySelectorAll(".hourly-box").forEach((cb) => {
+            cb.addEventListener("change", () => {
+              const who = cb.dataset.teacher;
+              const hour = cb.dataset.hour;
+              const set = hourlyAbsent.get(who) || new Set();
+              if (cb.checked) set.add(hour);
+              else set.delete(hour);
+              if (set.size) hourlyAbsent.set(who, set);
+              else hourlyAbsent.delete(who);
+
+              renderHourlySummary();
+              if (!restoring) {
+                renderSubstitutionTables();
+              }
+            });
+          });
+        }
+
+        function renderHourlySummary() {
+          if (!hourlyAbsent.size) {
+            hourlySummaryEl.innerHTML = `<span class="text-muted fst-italic">Nessuna selezione.</span>`;
+            return;
+          }
+          const rows = [];
+          Array.from(hourlyAbsent.keys())
+            .sort((a, b) => a.localeCompare(b))
+            .forEach((name) => {
+              const ore = Array.from(hourlyAbsent.get(name)).sort((a, b) =>
+                a.localeCompare(b)
+              );
+              rows.push(
+                `<div><i class="bi bi-person-fill text-primary me-1"></i><strong>${name}</strong>: ${ore.join(
+                  ", "
+                )}</div>`
+              );
+            });
+          hourlySummaryEl.innerHTML = rows.join("");
+        }
+
+        // Filtro ricerca giornalieri
+        searchDailyEl.addEventListener("input", () => {
+          buildDailyList(searchDailyEl.value);
+        });
+        hourlySelectEl.addEventListener("change", buildHourlyGrid);
+
+        // ====== LOGICA COMPRESENZA E POT ======
+        function potSlotsForDay(giornoEsteso) {
+          return scheduleData.filter(
+            (r) =>
+              normalizzaGiorno(r.Giorno || "") ===
+                normalizzaGiorno(giornoEsteso) &&
+              r.isPOT === true &&
+              !BANNED.has((r.Docente || "").trim())
+          );
+        }
+
+        function teachersInClassAt(classe, oi, of, giornoEsteso) {
+          return scheduleData.filter(
+            (r) =>
+              normalizzaGiorno(r.Giorno || "") ===
+                normalizzaGiorno(giornoEsteso) &&
+              (r.Classe || "").trim() === (classe || "").trim() &&
+              r.OraInizio === oi &&
+              r.OraFine === of
+          );
+        }
+
+        // Verifica compresenza e regole (POT vs disciplinare)
+        // Ritorna: {compresenza: bool, compresente: string|null, richiedeSostituto: bool}
+        function checkCompresenza(
+          classe,
+          oi,
+          of,
+          docenteAssente,
+          giornoEsteso
+        ) {
+          const all = teachersInClassAt(classe, oi, of, giornoEsteso);
+          const others = all.filter(
+            (t) => (t.Docente || "").trim() !== (docenteAssente || "").trim()
+          );
+          if (!others.length) {
+            return {
+              compresenza: false,
+              compresente: null,
+              richiedeSostituto: true,
+            };
+          }
+
+          // Determina chi è presente o assente tra i compresenti
+          const othersPresent = others.filter((o) => {
+            const nome = (o.Docente || "").trim();
+            const fullDayAbsent = dailyAbsent.has(nome);
+            const hourSet = hourlyAbsent.get(nome);
+            const hourAbsent = hourSet ? hourSet.has(`${oi}-${of}`) : false;
+            return !(fullDayAbsent || hourAbsent);
+          });
+
+          // Se almeno uno è presente → compresenza
+          if (othersPresent.length) {
+            // Regola speciale: se l’assente è POT e c'è un disciplinare presente → non serve sostituzione
+            const assenteRow = all.find(
+              (r) => (r.Docente || "").trim() === (docenteAssente || "").trim()
+            );
+            const isAbsentPOT = !!(assenteRow && assenteRow.isPOT);
+            const anyDiscPresent = othersPresent.some((r) => r.isPOT === false);
+            if (isAbsentPOT && anyDiscPresent) {
+              return {
+                compresenza: true,
+                compresente: (othersPresent[0].Docente || "").trim(),
+                richiedeSostituto: false,
+              };
+            }
+            return {
+              compresenza: true,
+              compresente: (othersPresent[0].Docente || "").trim(),
+              richiedeSostituto: false,
+            };
+          }
+
+          // Nessuno presente: tutti assenti in quell'ora
+          // Regola: se in classe ci sono (POT + disciplinare) e sono entrambi assenti → sostituisci solo disciplinare
+          const hasDisc = all.some((r) => r.isPOT === false);
+          const hasPOT = all.some((r) => r.isPOT === true);
+
+          if (hasDisc && hasPOT) {
+            // Se l’assente attuale è POT, non richiedere sostituto (si coprirà sul disciplinare)
+            const current = all.find(
+              (r) => (r.Docente || "").trim() === (docenteAssente || "").trim()
+            );
+            const isCurrentPOT = !!(current && current.isPOT);
+            if (isCurrentPOT) {
+              return {
+                compresenza: false,
+                compresente: null,
+                richiedeSostituto: false,
+              };
+            } else {
+              // Disciplinare assente: richiedi sostituto
+              return {
+                compresenza: false,
+                compresente: null,
+                richiedeSostituto: true,
+              };
+            }
+          }
+
+          // Se non è una coppia classica, resta la regola base: se tutti assenti, richiede sostituto
+          return {
+            compresenza: false,
+            compresente: null,
+            richiedeSostituto: true,
+          };
+        }
+
+        // ====== RIEPILOGO: cell update + visibilità per ora ======
+        function updateSummaryCell(absent, hour, text, className) {
+          const cell = document.querySelector(
+            `#summary-grid tbody tr[data-absent="${CSS.escape(
+              absent
+            )}"] td[data-hour="${hour}"]`
+          );
+          if (!cell) return;
+          if (!text) {
+            if (
+              !cell.dataset.comp &&
+              !cell.dataset.pot &&
+              !cell.dataset.permesso
+            )
+              cell.innerHTML = "";
+            return;
+          }
+          const low = text.toLowerCase();
+          if (low.includes("in compresenza")) {
+            cell.innerHTML = `<em>${text}</em>`;
+            cell.dataset.comp = "1";
+            delete cell.dataset.pot;
+            delete cell.dataset.permesso;
+          } else if (low.includes("permesso orario")) {
+            cell.innerHTML = `<em class="perm-text">Permesso orario</em>`;
+            cell.dataset.permesso = "1";
+            delete cell.dataset.comp;
+            delete cell.dataset.pot;
+          } else if (text.toUpperCase() === "POT") {
+            cell.innerHTML = `<strong class="text-secondary">POT</strong>`;
+            cell.dataset.pot = "1";
+            delete cell.dataset.comp;
+            delete cell.dataset.permesso;
+          } else {
+            // Sostituto con classe a capo
+            const cls = className ? ` (${className})` : "";
+            cell.innerHTML = `${text}${cls ? `<br>${cls}` : ""}`;
+            delete cell.dataset.comp;
+            delete cell.dataset.pot;
+            delete cell.dataset.permesso;
+          }
+        }
+
+        function refreshPotVisibilityForHour(hour) {
+          const selects = document.querySelectorAll(
+            `select[data-hour='${hour}']`
+          );
+          const chosen = new Map();
+          selects.forEach((sel) => {
+            if (sel.value)
+              chosen.set(
+                sel.id || `${sel.dataset.absent}|${sel.dataset.class}`,
+                sel.value
+              );
+          });
+          const taken = new Set([...chosen.values()]);
+
+          selects.forEach((sel) => {
+            const myValue = sel.value;
+            sel.querySelectorAll("option[data-pot]").forEach((op) => {
+              const val = op.value;
+              op.disabled = taken.has(val) && val !== myValue;
+            });
+          });
+        }
+
+        // =====================================================
+        // 🔍 Verifica se un docente è in compresenza in una data ora
+        // =====================================================
+        function isCompresenza(
+          classe,
+          oraInizio,
+          oraFine,
+          docente,
+          giorno,
+          tutti = [],
+          esclusi = []
+        ) {
+          // cerca nel dataset generale (scheduleData) un altro docente nella stessa ora e classe
+          const altri = scheduleData.filter((r) => {
+            if (!r.Classe || !r.Docente) return false;
+            if (r.Docente.trim() === docente.trim()) return false; // non se stesso
+            if (r.Classe.trim() !== classe.trim()) return false;
+            if (normalizzaGiorno(r.Giorno) !== normalizzaGiorno(giorno))
+              return false;
+            return r.OraInizio === oraInizio && r.OraFine === oraFine;
+          });
+
+          // se trova almeno un altro docente → compresenza
+          if (altri.length > 0) {
+            const compresente = altri.map((r) => r.Docente.trim()).join(", ");
+            return { stato: true, compresente };
+          }
+
+          // nessuna compresenza trovata
+          return { stato: false, compresente: "" };
+        }
+
+        // ====== RENDER SEZIONE 2 (tabelle + riepilogo) ======
+        // =====================================================
+        // 🔧 GENERAZIONE SEZIONE 2: Tabelle sostituzioni
+        // =====================================================
+        function renderSubstitutionTables(restored = restoredChoices) {
+          resultsContainer.innerHTML = ""; // svuota area risultati
+          let html = "";
+
+          // intestazione data
+          const dateObj = new Date(dateInput.value);
+          const g = String(dateObj.getDate()).padStart(2, "0");
+          const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+          const a = dateObj.getFullYear();
+          const giornoEsteso = giorniEstesi[dateObj.getUTCDay()];
+
+          // -------------------------------
+          // 📘 SEZIONE ASSENZE GIORNALIERE
+          // -------------------------------
+          html += `
+  <div class="card mb-4">
+    <div class="card-header bg-primary text-white fw-bold">
+      Assenze giornaliere — ${g}/${m}/${a}
+    </div>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0 align-middle">
+        <thead class="bg-primary text-white">
+          <tr>
+            <th class="teacher-cell">Docente assente</th>
+            ${HOURS.map(
+              (h) => `<th class="hour-col text-center">${h}</th>`
+            ).join("")}
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+          // Scorre tutti i docenti selezionati come assenti giornalieri
+          const giornalieri = Array.from(dailyAbsent);
+          giornalieri.forEach((docente) => {
+            html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td>`;
+
+            HOURS.forEach((hour) => {
+              // Cerca lezioni di quel docente in quell’ora
+              const lez = scheduleData.find(
+                (r) =>
+                  normalizzaGiorno(r.Giorno) ===
+                    normalizzaGiorno(giornoEsteso) &&
+                  (r.Docente || "").trim() === docente &&
+                  `${r.OraInizio}-${r.OraFine}` === hour
+              );
+
+              if (!lez) {
+                html += `<td data-hour="${hour}" data-absent="${docente}"></td>`;
+                return;
+              }
+
+              const classe = lez.Classe || "";
+              const comp = isCompresenza(
+                classe,
+                lez.OraInizio,
+                lez.OraFine,
+                docente,
+                giornoEsteso,
+                [],
+                []
+              );
+
+              if (comp.stato) {
+                const label = `In compresenza${
+                  comp.compresente ? `<br>(${comp.compresente})` : ""
+                }`;
+                html += `<td data-hour="${hour}" data-absent="${docente}">
+          <div class="comp-text">${label}</div></td>`;
+              } else {
+                // 🔹 Determina i docenti POT disponibili in quell’ora
+                const potSlots = scheduleData.filter(
+                  (r) =>
+                    normalizzaGiorno(r.Giorno) ===
+                      normalizzaGiorno(giornoEsteso) &&
+                    r.OraInizio === lez.OraInizio &&
+                    r.OraFine === lez.OraFine &&
+                    r.isPOT === true
+                );
+
+                if (potSlots.length === 0) {
+                  // Nessun POT -> campo manuale
+                  html += `<td data-hour="${hour}" data-absent="${docente}">
+              <div class="class-label">${classe}</div>
+              <input type="text" class="form-control form-control-sm manual-pot" 
+                     placeholder="Manuale..." 
+                     data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+            </td>`;
+                } else {
+                  html += `<td data-hour="${hour}" data-absent="${docente}">
+              <div class="class-label">${classe}</div>
+              <select class="form-select form-select-sm select-pot" 
+                      data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+                <option value="">—</option>
+                ${potSlots
+                  .filter((p) => !BANNED.has(p.Docente.trim().toUpperCase()))
+                  .map(
+                    (p) =>
+                      `<option data-pot value="${p.Docente.trim()}">${p.Docente.trim()}</option>`
+                  )
+                  .join("")}
+              </select>
+              <input type="text" class="form-control form-control-sm mt-1 manual-pot" 
+                     placeholder="Manuale..." 
+                     data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+            </td>`;
+                }
+              }
+            });
+            html += "</tr>";
+          });
+
+          html += `</tbody></table></div></div>`;
+
+          // -------------------------------
+          // 📙 SEZIONE ASSENZE ORARIE
+          // -------------------------------
+          html += `
+  <div class="card mb-4">
+    <div class="card-header bg-primary text-white fw-bold">
+      Assenze orarie — ${g}/${m}/${a}
+    </div>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0 align-middle">
+        <thead class="bg-primary text-white">
+          <tr>
+            <th class="teacher-cell">Docente assente</th>
+            ${HOURS.map(
+              (h) => `<th class="hour-col text-center">${h}</th>`
+            ).join("")}
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+          hourlyAbsent.forEach((hoursSet, docente) => {
+            html += `<tr><td><i class="bi bi-person-fill text-primary me-1"></i>${docente}</td>`;
+
+            HOURS.forEach((hour) => {
+              if (!hoursSet.has(hour)) {
+                html += `<td data-hour="${hour}" data-absent="${docente}"></td>`;
+                return;
+              }
+
+              const lez = scheduleData.find(
+                (r) =>
+                  normalizzaGiorno(r.Giorno) ===
+                    normalizzaGiorno(giornoEsteso) &&
+                  (r.Docente || "").trim() === docente &&
+                  `${r.OraInizio}-${r.OraFine}` === hour
+              );
+
+              if (!lez) {
+                html += `<td data-hour="${hour}" data-absent="${docente}"></td>`;
+                return;
+              }
+
+              const classe = lez.Classe || "";
+              const comp = isCompresenza(
+                classe,
+                lez.OraInizio,
+                lez.OraFine,
+                docente,
+                giornoEsteso,
+                [],
+                []
+              );
+
+              if (comp.stato) {
+                const label = `In compresenza${
+                  comp.compresente ? `<br>(${comp.compresente})` : ""
+                }`;
+                html += `<td data-hour="${hour}" data-absent="${docente}">
+          <div class="comp-text">${label}</div></td>`;
+              } else {
+                const potSlots = scheduleData.filter(
+                  (r) =>
+                    normalizzaGiorno(r.Giorno) ===
+                      normalizzaGiorno(giornoEsteso) &&
+                    r.OraInizio === lez.OraInizio &&
+                    r.OraFine === lez.OraFine &&
+                    r.isPOT === true
+                );
+
+                if (potSlots.length === 0) {
+                  html += `<td data-hour="${hour}" data-absent="${docente}">
+              <div class="class-label">${classe}</div>
+              <input type="text" class="form-control form-control-sm manual-pot" 
+                     placeholder="Manuale..." 
+                     data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+            </td>`;
+                } else {
+                  html += `<td data-hour="${hour}" data-absent="${docente}">
+              <div class="class-label">${classe}</div>
+              <select class="form-select form-select-sm select-pot" 
+                      data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+                <option value="">—</option>
+                ${potSlots
+                  .filter((p) => !BANNED.has(p.Docente.trim().toUpperCase()))
+                  .map(
+                    (p) =>
+                      `<option data-pot value="${p.Docente.trim()}">${p.Docente.trim()}</option>`
+                  )
+                  .join("")}
+              </select>
+              <input type="text" class="form-control form-control-sm mt-1 manual-pot" 
+                     placeholder="Manuale..." 
+                     data-absent="${docente}" data-hour="${hour}" data-class="${classe}">
+            </td>`;
+                }
+              }
+            });
+
+            html += "</tr>";
+          });
+
+          html += `</tbody></table></div></div>`;
+
+          // -------------------------------
+          // 📗 SEZIONE RIEPILOGO
+          // -------------------------------
+          const allAbsent = [
+            ...giornalieri,
+            ...Array.from(hourlyAbsent.keys()),
+          ].filter((v, i, a) => a.indexOf(v) === i);
+
+          html += `
+  <div class="card mb-4">
+    <div class="card-header bg-success text-white fw-bold">Riepilogo Sostituzioni Selezionate</div>
+    <div class="card-body p-3">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle" id="summary-grid">
+          <thead class="bg-success text-white">
+            <tr>
+              <th class="teacher-cell">Docente assente</th>
+              ${HOURS.map(
+                (h) => `<th class="hour-col text-center">${h}</th>`
+              ).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${allAbsent
+              .map(
+                (nome) => `
+                <tr data-absent="${nome}">
+                  <td>${nome}</td>
+                  ${HOURS.map(
+                    (h) =>
+                      `<td data-hour="${h}" data-absent="${nome}" class="text-center"></td>`
+                  ).join("")}
+                </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-3">
+        <label for="notes" class="form-label fw-semibold">Note (opzionali)</label>
+        <textarea id="notes" class="form-control" rows="3" placeholder="Scrivi eventuali note..."></textarea>
+      </div>
+      <div class="d-flex flex-column flex-md-row justify-content-center gap-3 mt-4">
+        <button id="export-pdf-btn" class="btn btn-outline-success px-4 fw-semibold">
+          <i class="bi bi-file-earmark-pdf-fill me-1"></i> Scarica PDF e Salva Riepilogo
+        </button>
+        <button id="reset-sost-btn" class="btn btn-outline-danger px-4 fw-semibold">
+          <i class="bi bi-arrow-counterclockwise me-1"></i> Resetta selezioni
+        </button>
+      </div>
+    </div>
+  </div>`;
+
+          resultsContainer.innerHTML = html;
+
+          // =====================================================
+          // 🔁 RIPRISTINO SCELTE SALVATE (select / manual)
+          // =====================================================
+          if (restored && restored.size > 0) {
+            restored.forEach((entry, key) => {
+              const [docenteAssente, ora] = key.split("|");
+              const { Sostituto, Classe, Tipo } = entry;
+
+              if (!HOURS.includes(ora) || Tipo === "POTENZIAMENTO") return;
+
+              // riepilogo
+              updateSummaryCell(docenteAssente, ora, Sostituto, Classe);
+
+              // cella nella tabella principale
+              const cell = document.querySelector(
+                `.table tbody tr td[data-hour="${ora}"][data-absent="${CSS.escape(
+                  docenteAssente
+                )}"]`
+              );
+              if (!cell) return;
+
+              const sel = cell.querySelector("select.select-pot");
+              const manual = cell.querySelector("input.manual-pot");
+
+              if (sel) {
+                const opt = [...sel.options].find(
+                  (o) => o.value.trim() === (Sostituto || "").trim()
+                );
+                if (opt) {
+                  sel.disabled = false;
+                  sel.value = Sostituto;
+                  if (manual) manual.value = "";
+                } else {
+                  sel.value = "";
+                  sel.disabled = true;
+                  if (manual) manual.value = Sostituto || "";
+                }
+              } else if (manual) {
+                manual.value = Sostituto || "";
+              }
+            });
+          }
+
+          // ✅ Rendi dinamiche le select e i campi manuali
+          document.querySelectorAll(".select-pot").forEach((sel) => {
+            sel.addEventListener("change", (e) => {
+              const s = e.target;
+              const man = s.parentElement.querySelector("input.manual-pot");
+              if (s.value) {
+                s.disabled = false;
+                if (man) man.value = "";
+              }
+              updateSummaryCell(
+                s.dataset.absent,
+                s.dataset.hour,
+                s.value || "",
+                s.dataset.class
+              );
+              refreshPotVisibilityForHour(s.dataset.hour);
+            });
+          });
+
+          document.querySelectorAll(".manual-pot").forEach((inp) => {
+            inp.addEventListener("input", (e) => {
+              const i = e.target;
+              const sel = i.parentElement.querySelector("select.select-pot");
+              if (i.value.trim()) {
+                if (sel) sel.disabled = true;
+              } else if (sel) {
+                sel.disabled = false;
+              }
+              updateSummaryCell(
+                i.dataset.absent,
+                i.dataset.hour,
+                i.value.trim(),
+                i.dataset.class
+              );
+              refreshPotVisibilityForHour(i.dataset.hour);
+            });
+          });
+          updateSummaryForCompresenze();
+        }
+
+        // ====== SALVATAGGIO CSV & PDF ======
+        async function uploadCsvToServer(csvContent, filename, remotePath) {
+          try {
+            const formData = new FormData();
+            formData.append("path", remotePath);
+            formData.append("filename", filename);
+            formData.append("csv_content", csvContent);
+
+            const response = await fetch(phpScriptUrl, {
+              method: "POST",
+              body: formData,
+            });
+            const result = await response.json();
+
+            if (response.ok && result.status === "success") {
+              showToast(
+                `<i class="bi bi-cloud-check-fill me-2"></i> Riepilogo salvato sul server`
+              );
+            } else {
+              showToast(
+                `<i class="bi bi-cloud-slash-fill me-2"></i> Errore salvataggio: ${
+                  result.message || "sconosciuto"
+                }`,
+                "alert-danger"
+              );
+            }
+          } catch (error) {
+            showToast(
+              `<i class="bi bi-cloud-slash-fill me-2"></i> Errore rete salvataggio`,
+              "alert-danger"
+            );
+          }
+        }
+
+        // === AGGIORNA riepilogo per compresenze ===
+        function updateSummaryForCompresenze() {
+          document.querySelectorAll(".comp-text").forEach((cell) => {
+            const row = cell.closest("tr");
+            if (!row) return;
+
+            const docente = row
+              .querySelector("td:first-child")
+              ?.textContent?.trim();
+            const hourHeader = cell
+              .closest("table")
+              ?.querySelectorAll("thead th");
+            const colIndex = Array.from(
+              cell.parentNode.parentNode.children
+            ).indexOf(cell.parentNode);
+            const hour =
+              hourHeader && hourHeader[colIndex]
+                ? hourHeader[colIndex].textContent.trim()
+                : null;
+
+            if (docente && hour) {
+              const summaryRow = document.querySelector(
+                `#summary-grid tbody tr[data-absent="${CSS.escape(docente)}"]`
+              );
+              if (summaryRow) {
+                const summaryCell = summaryRow.querySelector(
+                  `td[data-hour="${hour}"]`
+                );
+                if (summaryCell) {
+                  summaryCell.innerHTML = cell.outerHTML; // copia lo stesso contenuto
+                  summaryCell.dataset.comp = "1";
+                }
+              }
+            }
+          });
+        }
+
+        async function exportPdfAndSave() {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation: "landscape" });
+
+          const dateEl = document.getElementById("date-input");
+          const dateObj =
+            dateEl && dateEl.value ? new Date(dateEl.value) : new Date();
+          const dataFmt = dateObj.toLocaleDateString("it-IT", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+
+          // 🔹 Titolo e intestazione
+          doc.setFontSize(14);
+          doc.setFont("helvetica", "bold");
+          doc.text(`Sostituzioni del giorno ${dataFmt}`, 148, 15, {
+            align: "center",
+          });
+
+          // 🔹 Genera la tabella principale dal riepilogo (summary-grid)
+          const summaryTable = document.getElementById("summary-grid");
+          if (!summaryTable) {
+            showToast(
+              `<i class="bi bi-exclamation-triangle-fill me-2"></i> Nessuna tabella di riepilogo trovata.`,
+              "alert-danger"
+            );
+            return;
+          }
+
+          doc.autoTable({
+            html: "#summary-grid",
+            startY: 25,
+            theme: "grid",
+            headStyles: {
+              fillColor: [25, 135, 84],
+              textColor: [255, 255, 255],
+              halign: "center",
+              valign: "middle",
+            },
+            styles: {
+              fontSize: 10,
+              cellPadding: 3,
+              lineColor: [222, 226, 230],
+              lineWidth: 0.2,
+              textColor: [33, 37, 41],
+              halign: "center",
+              valign: "middle",
+            },
+            tableLineWidth: 0.1,
+            tableWidth: "auto",
+            didDrawPage: (data) => {
+              const pageWidth = doc.internal.pageSize.getWidth();
+              const pageHeight = doc.internal.pageSize.getHeight();
+
+              // titolo ripetuto
+              doc.setFontSize(14);
+              doc.setTextColor(33, 37, 41);
+              doc.setFont("helvetica", "bold");
+              doc.text(
+                `Sostituzioni del giorno ${dataFmt}`,
+                pageWidth / 2,
+                15,
+                {
+                  align: "center",
+                }
+              );
+
+              // paginazione centrata
+              const pageCount = doc.internal.getNumberOfPages();
+              const footer = `Pagina ${data.pageNumber} / ${pageCount}`;
+              doc.setFontSize(10);
+              doc.setTextColor(150);
+              const textWidth = doc.getTextWidth(footer);
+              const xCenter = (pageWidth - textWidth) / 2;
+              doc.text(footer, xCenter, pageHeight - 10);
+            },
+            didParseCell: (data) => {
+              const txt =
+                data.cell.text && data.cell.text[0]
+                  ? data.cell.text[0].toLowerCase()
+                  : "";
+
+              // Stile specifico per tipo di cella
+              if (txt.includes("in compresenza")) {
+                data.cell.styles.fontStyle = "italic";
+                data.cell.styles.textColor = [108, 117, 125];
+              } else if (txt.includes("pot")) {
+                data.cell.styles.fontStyle = "bold";
+                data.cell.styles.textColor = [108, 117, 125];
+              } else if (txt.includes("permesso orario")) {
+                data.cell.styles.fontStyle = "italic";
+                data.cell.styles.textColor = [13, 202, 240];
+              }
+            },
+            margin: { top: 25, left: 10, right: 10 },
+          });
+
+          // 🔹 Aggiungi eventuali note
+          const notesEl = document.getElementById("notes");
+          const notesText = notesEl ? notesEl.value.trim() : "";
+          if (notesText) {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            let y =
+              (doc.lastAutoTable && doc.lastAutoTable.finalY
+                ? doc.lastAutoTable.finalY
+                : 25) + 10;
+            doc.setFontSize(9);
+            doc.setTextColor(90);
+            const wrapped = doc.splitTextToSize(notesText, pageWidth - 28);
+            doc.text(wrapped, 14, y);
+          }
+
+          // 🔹 Salva PDF
+          const y_pdf = String(dateObj.getFullYear());
+          const m_pdf = String(dateObj.getMonth() + 1).padStart(2, "0");
+          const d_pdf = String(dateObj.getDate()).padStart(2, "0");
+          const pdfFilename = `riepilogo_sostituzioni_${y_pdf}${m_pdf}${d_pdf}.pdf`;
+          doc.save(pdfFilename);
+
+          // 🔹 Prepara CSV riepilogo (senza usare sostituzioniMap)
+          const rows = [];
+          rows.push(["DocenteAssente", "Ora", "Sostituto", "Classe", "Tipo"]);
+
+          // Assenti giornalieri
+          dailyAbsent.forEach((teacher) => {
+            rows.push([teacher, "GIORNALIERO", "", "", "ASSENZA_GIORNALIERA"]);
+          });
+
+          // Assenti orari (tabella riepilogo)
+          const summaryRows = document.querySelectorAll(
+            "#summary-grid tbody tr"
+          );
+          summaryRows.forEach((tr) => {
+            const docenteAssente =
+              tr.dataset.absent || tr.cells[0].innerText.trim();
+            tr.querySelectorAll("td[data-hour]").forEach((td) => {
+              const ora = td.dataset.hour;
+              const html = td.innerHTML.trim();
+              if (!html) return;
+
+              let tipo = "SOSTITUZIONE";
+              let sostituto = "";
+              let classe = "";
+
+              if (html.includes("POT")) tipo = "POTENZIAMENTO";
+              else if (html.toLowerCase().includes("permesso"))
+                tipo = "PERMESSO_ORARIO";
+              else if (html.toLowerCase().includes("in compresenza")) {
+                tipo = "COMPRESENZA";
+                const m = html.match(/\((.*?)\)/);
+                sostituto = m ? m[1] : "";
+              } else {
+                const parts = html.split("<br>");
+                sostituto = parts[0]?.trim() || "";
+                classe = parts[1]?.replace(/[()]/g, "").trim() || "";
+              }
+
+              rows.push([docenteAssente, ora, sostituto, classe, tipo]);
+            });
+          });
+
+          const csvContent = rows
+            .map((r) => r.map((v) => `"${v}"`).join(","))
+            .join("\n");
+
+          // 🔹 Upload CSV al server remoto
+          const giornoSettimana = abbrevMap[dateObj.getUTCDay()];
+          const g_csv = String(dateObj.getDate()).padStart(2, "0");
+          const m_csv = String(dateObj.getMonth() + 1).padStart(2, "0");
+          const a_csv = dateObj.getFullYear();
+          const csvFilename = `sostituzioni_${giornoSettimana}-${g_csv}${m_csv}${a_csv}.csv`;
+          const remotePath = `${a_csv}/${m_csv}`;
+
+          try {
+            await uploadCsvToServer(csvContent, csvFilename, remotePath);
+            showToast(
+              `<i class="bi bi-file-earmark-pdf-fill me-2"></i> PDF scaricato e riepilogo salvato con successo.`,
+              "alert-success"
+            );
+          } catch (err) {
+            console.error("Errore nel salvataggio CSV remoto:", err);
+            showToast(
+              `<i class="bi bi-exclamation-triangle-fill me-2"></i> PDF generato, ma errore nel salvataggio remoto.`,
+              "alert-warning"
+            );
+          }
+        }
+
+        window.exportPdfAndSave = exportPdfAndSave;
+
+        // 🔁 Ripristino automatico da CSV remoto (versione FIX con log e normalizzazioni)
+        async function tryRestoreFromRemote() {
+          const selectedDate = dateInput.value;
+          if (!selectedDate) return;
+
+          const d = new Date(selectedDate);
+          const giornoSettimana = abbrevMap[d.getUTCDay()];
+          const g = String(d.getDate()).padStart(2, "0");
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const a = d.getFullYear();
+
+          const fullCsvPath = remoteBaseUrl + csvDataPath;
+          const urlSostituzioni = `${fullCsvPath}${a}/${m}/sostituzioni_${giornoSettimana}-${g}${m}${a}.csv`;
+
+          // 1) Verifica esistenza con HEAD (no-cache)
+          let exists = false;
+          try {
+            const head = await fetch(urlSostituzioni, {
+              method: "HEAD",
+              cache: "no-store",
+            });
+            exists = head.ok;
+          } catch {
+            exists = false;
+          }
+          if (!exists) {
+            console.log(
+              "[RESTORE] Nessun CSV di ripristino trovato:",
+              urlSostituzioni
+            );
+            return;
+          }
+
+          // 2) Conferma utente
+          if (
+            !window.confirm(
+              "Trovata una configurazione salvata per questa data. Vuoi ripristinarla?"
+            )
+          ) {
+            console.log("[RESTORE] L’utente ha annullato il ripristino.");
+            return;
+          }
+
+          try {
+            console.log("[RESTORE] Scarico CSV:", urlSostituzioni);
+            const raw = await fetchCSV(urlSostituzioni);
+            // split robusto per CRLF / LF
+            const lines = raw
+              .split(/\r?\n/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+
+            // log intestazione + prime righe
+            console.log(
+              "[RESTORE] Righe totali (incl. intestazione):",
+              lines.length
+            );
+            if (lines.length > 0)
+              console.log("[RESTORE] Intestazione CSV:", lines[0]);
+
+            // reset strutture temporanee
+            const tmpDaily = new Set();
+            const tmpHourly = new Map(); // docente -> Set(ore)
+            restoredChoices = new Map(); // `${docente}|${ora}` -> {Sostituto, Classe, Tipo}
+
+            // 3) Parsiamo dalla seconda riga (salta intestazione)
+            for (let i = 1; i < lines.length; i++) {
+              const line = lines[i];
+              if (!line) continue;
+
+              // parsing CSV “tollerante” a virgole e virgolette
+              const parts = line.match(
+                /(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|([^\",]+))/g
+              );
+              if (!parts) {
+                console.warn(`[RESTORE] Riga ${i} non parsabile, salto:`, line);
+                continue;
+              }
+              // normalizza valori rimuovendo virgolette e CR
+              const vals = parts.map((v) =>
+                v
+                  .replace(/^"|"$/g, "")
+                  .replace(/""/g, '"')
+                  .replace(/\r/g, "")
+                  .trim()
+              );
+
+              if (vals.length !== 5) {
+                console.warn(
+                  `[RESTORE] Riga ${i} con ${vals.length} campi (attesi 5), salto:`,
+                  vals
+                );
+                continue;
+              }
+
+              let [docente, ora, sostituto, classe, tipo] = vals;
+              // log “grezzo”
+              console.log(`[RESTORE][riga ${i}]`, {
+                docente,
+                ora,
+                sostituto,
+                classe,
+                tipo,
+              });
+
+              // 3.a) Assenza giornaliera solo se esplicitamente marcata
+              // 3.a) Assenza giornaliera solo se esplicitamente marcata
+              if (tipo === "ASSENZA_GIORNALIERA" || ora === "GIORNALIERO") {
+                tmpDaily.add(docente);
+                console.log(
+                  `[RESTORE] Marcato come assente giornaliero: ${docente}`
+                );
+
+                // ✅ Cerca anche eventuali righe successive dello stesso docente
+                // per popolare le scelte dei sostituti nelle ore
+                const relatedRows = lines
+                  .slice(i + 1)
+                  .map((l) =>
+                    l.match(/(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|([^\",]+))/g)
+                  )
+                  .filter(Boolean)
+                  .map((arr) =>
+                    arr.map((v) =>
+                      v.replace(/^"|"$/g, "").replace(/""/g, '"').trim()
+                    )
+                  )
+                  .filter(
+                    (v) =>
+                      v[0] === docente &&
+                      HOURS.includes(v[1]) &&
+                      v[4] !== "ASSENZA_GIORNALIERA"
+                  );
+
+                // Se non ci sono righe specifiche, crea placeholder per tutte le ore
+                if (relatedRows.length === 0) {
+                  HOURS.forEach((h) => {
+                    const key = `${docente}|${h}`;
+                    if (!restoredChoices.has(key)) {
+                      restoredChoices.set(key, {
+                        Sostituto: "",
+                        Classe: "",
+                        Tipo: "ASSENZA_GIORNALIERA",
+                      });
+                    }
+                  });
+                } else {
+                  // Se ci sono, importa le sostituzioni vere
+                  relatedRows.forEach(
+                    ([doc, oraRel, sostRel, clsRel, tipoRel]) => {
+                      const key = `${doc}|${oraRel}`;
+                      restoredChoices.set(key, {
+                        Sostituto: sostRel || "",
+                        Classe: clsRel || "",
+                        Tipo: tipoRel || "SOSTITUZIONE",
+                      });
+                      console.log(
+                        `[RESTORE] Aggiunta sostituzione per ${doc} @ ${oraRel}: ${sostRel}`
+                      );
+                    }
+                  );
+                }
+              }
+
+              // 3.b) Righe orarie (SOSTITUZIONE / COMPRESENZA / POTENZIAMENTO)
+              // normalizza l’ora: potrebbe avere CR o spazi residui
+              // 3.b) Righe orarie (SOSTITUZIONE / COMPRESENZA / POTENZIAMENTO)
+              ora = ora.replace(/\r/g, "").trim();
+
+              // Se il docente è già marcato come assente giornaliero, non aggiungerlo mai alle orarie
+              if (tmpDaily.has(docente)) {
+                console.log(
+                  `[RESTORE] ${docente} è già assente giornaliero → salto righe orarie`
+                );
+                continue;
+              }
+
+              if (!HOURS.includes(ora)) {
+                console.warn(
+                  `[RESTORE] Ora non valida o non in HOURS (${ora}). Riga ${i} scartata.`
+                );
+                continue;
+              }
+
+              // registra ore assenza oraria
+              const set = tmpHourly.get(docente) || new Set();
+              set.add(ora);
+              tmpHourly.set(docente, set);
+
+              // memorizza la scelta per quel blocco (anche se vuota, serve per riepilogo)
+              restoredChoices.set(`${docente}|${ora}`, {
+                Sostituto: sostituto || "",
+                Classe: classe || "",
+                Tipo: tipo || "SOSTITUZIONE",
+              });
+            }
+
+            // 4) LOG riepilogo parsing
+            console.log(
+              "[RESTORE] Assenti giornalieri ripristinati:",
+              Array.from(tmpDaily)
+            );
+            console.log(
+              "[RESTORE] Assenti orari ripristinati:",
+              [...tmpHourly.entries()].map(([k, v]) => [k, [...v]])
+            );
+            console.log("[RESTORE] Scelte ripristinate (keys):", [
+              ...restoredChoices.keys(),
+            ]);
+
+            // 5) Aggiorna stato globale + UI Sezione 1
+            restoring = true;
+            dailyAbsent = tmpDaily;
+            hourlyAbsent = tmpHourly;
+
+            buildDailyList(searchDailyEl.value);
+            buildHourlyTeacherSelect();
+            renderHourlySummary();
+
+            // Spunta i checkbox dei giornalieri
+            dailyListEl.querySelectorAll(".daily-absent").forEach((cb) => {
+              cb.checked = dailyAbsent.has(cb.value);
+            });
+
+            // (opz.) Mostra anteprima assenze orarie rilevate (checkbox disabilitati)
+            hourlyGridEl.innerHTML = "";
+            tmpHourly.forEach((hoursSet, teacher) => {
+              const allowed =
+                getTeacherHoursOnDate(teacher, selectedDate) || [];
+              const validHours = [...hoursSet].filter((h) =>
+                allowed.includes(h)
+              );
+              if (!validHours.length) return;
+
+              const div = document.createElement("div");
+              div.className = "mb-2 border-bottom pb-1";
+              div.innerHTML = `<div class="fw-bold small mb-1 text-primary">
+        <i class="bi bi-person-fill me-1"></i>${teacher}
+      </div>`;
+              validHours.forEach((h) => {
+                div.innerHTML += `<div class="form-check form-check-inline">
+          <input class="form-check-input hourly-box" type="checkbox" checked disabled>
+          <label class="form-check-label small">${h}</label>
+        </div>`;
+              });
+              hourlyGridEl.appendChild(div);
+            });
+
+            restoring = false;
+
+            // 6) Render Sezione 2 con applicazione scelte ripristinate (select/input + riepilogo)
+            renderSubstitutionTables(restoredChoices);
+            HOURS.forEach(refreshPotVisibilityForHour);
+
+            // 7) LOG di verifica applicazione in UI
+            restoredChoices.forEach((val, key) => {
+              const [doc, h] = key.split("|");
+              const cell = document.querySelector(
+                `.table tbody tr td[data-hour="${h}"][data-absent="${CSS.escape(
+                  doc
+                )}"]`
+              );
+              console.log(`[RESTORE][UI] cella ${doc} @ ${h}:`, {
+                trovata: !!cell,
+                scelta: val,
+              });
+            });
+
+            showToast(
+              `<i class="bi bi-arrow-counterclockwise me-2"></i> Ripristino completato`
+            );
+          } catch (e) {
+            console.error("[RESTORE] Errore durante il ripristino:", e);
+            showToast(
+              `<i class="bi bi-exclamation-octagon-fill me-2"></i> Errore nel ripristino`,
+              "alert-danger"
+            );
+          }
+        }
+
+        function refillHourlyUIFromRestoredHourly(
+          restoredHourly,
+          selectedDate
+        ) {
+          if (!hourlyGridEl) return;
+
+          // Pulisci il contenitore delle assenze orarie “selezionate”
+          hourlyGridEl.innerHTML = "";
+
+          restoredHourly.forEach((hoursSet, teacher) => {
+            // mostra solo ore che il docente ha davvero in quel giorno
+            const allowed = getTeacherHoursOnDate(teacher, selectedDate) || [];
+            const validHours = [...hoursSet].filter((h) => allowed.includes(h));
+            if (validHours.length === 0) return;
+
+            const wrapper = document.createElement("div");
+            wrapper.className = "mb-2 border-bottom pb-1";
+            wrapper.innerHTML = `
+      <div class="fw-bold small mb-1 text-primary">
+        <i class="bi bi-person-fill me-1"></i>${teacher}
+      </div>
+    `;
+
+            validHours.forEach((h) => {
+              const item = document.createElement("div");
+              item.className = "form-check form-check-inline";
+              item.innerHTML = `
+        <input class="form-check-input hourly-box" type="checkbox" checked disabled>
+        <label class="form-check-label small">${h}</label>
+      `;
+              wrapper.appendChild(item);
+            });
+
+            hourlyGridEl.appendChild(wrapper);
+          });
+        }
+
+        // ====== INIZIALIZZAZIONE ======
+        async function initAll() {
+          resultsContainer.innerHTML = `<div class="alert alert-warning text-center">Caricamento orario in corso...</div>`;
+          await loadOrario();
+
+          // Sezione 1
+          buildDailyList();
+          buildHourlyTeacherSelect();
+          buildHourlyGrid();
+          renderHourlySummary();
+
+          // Prova ripristino automatico
+          await tryRestoreFromRemote();
+
+          // Primo render sezione 2 (in base a eventuali ripristini)
+          renderSubstitutionTables();
+        }
+
+        // Ricarica / Ripristina (mantiene data corrente)
+        loadBtn.addEventListener("click", async () => {
+          await initAll();
+        });
+
+        // Cambio data: ricarica tutto
+        dateInput.addEventListener("change", async () => {
+          // reset selezioni
+          dailyAbsent.clear();
+          hourlyAbsent.clear();
+          await initAll();
+        });
+
+        // Avvio
+        initAll();
+      });
+
+      document.addEventListener("click", async (e) => {
+        const btn = e.target.closest("#export-pdf-btn");
+        if (!btn) return;
+
+        try {
+          console.log("[EXPORT] Avvio generazione PDF + salvataggio CSV...");
+          await window.exportPdfAndSave();
+        } catch (err) {
+          console.error("[EXPORT] Errore durante l’esportazione:", err);
+          window.showToast(
+            `<i class="bi bi-exclamation-triangle-fill me-2"></i> Errore durante la generazione del PDF.`,
+            "alert-danger"
+          );
+        }
+      });
+    </script>
+    <!-- Bootstrap JS (necessario per il modal e altri componenti dinamici) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
