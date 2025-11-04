@@ -67,6 +67,7 @@
       .perm-text {
         color: #6c757d;
         font-style: italic;
+        text-align: center;
       }
       .select-pot {
         min-width: 150px;
@@ -417,23 +418,23 @@
               const item = document.createElement("div");
               item.className = "form-check";
               item.innerHTML = `
-                <input class="form-check-input daily-absent" type="checkbox" id="${id}" value="${name}" ${checked}>
-                <label class="form-check-label" for="${id}">
-                  <i class="bi bi-person-fill text-primary me-1"></i>${name}
-                </label>
-              `;
+        <input class="form-check-input daily-absent" type="checkbox" id="${id}" value="${name}" ${checked}>
+        <label class="form-check-label" for="${id}">
+          <i class="bi bi-person-fill text-primary me-1"></i>${name}
+        </label>
+      `;
               dailyListEl.appendChild(item);
             });
 
-          // Bind
+          // Bind event listeners
           dailyListEl.querySelectorAll(".daily-absent").forEach((cb) => {
             cb.addEventListener("change", () => {
               const name = cb.value;
+
               if (cb.checked) {
                 dailyAbsent.add(name);
-                // rimuovi da orarie
+                // Rimuovi da orarie
                 hourlyAbsent.delete(name);
-                // aggiorna UI hourly
                 buildHourlyTeacherSelect();
                 buildHourlyGrid(); // reset griglia ore
                 renderHourlySummary();
@@ -441,9 +442,91 @@
                 dailyAbsent.delete(name);
                 buildHourlyTeacherSelect();
               }
+
               if (!restoring) {
-                // ricalcola subito sezione 2
+                // 🔄 salva le scelte correnti (select o input manuali)
+                const currentChoices = new Map();
+                document
+                  .querySelectorAll("select.select-pot, input.manual-pot")
+                  .forEach((el) => {
+                    const key = `${el.dataset.absent}|${el.dataset.hour}`;
+                    const value = el.value?.trim() || "";
+                    if (value) currentChoices.set(key, value);
+                  });
+
+                // ricrea la sezione 2 (tabelle)
                 renderSubstitutionTables();
+
+                // 🔁 ripristina le scelte ancora valide
+                // 🔁 ripristina le scelte salvate dove ancora valide **e aggiorna il riepilogo**
+                currentChoices.forEach((val, key) => {
+                  const [doc, ora] = key.split("|");
+                  const cell = document.querySelector(
+                    `.table tbody tr td[data-hour="${ora}"][data-absent="${CSS.escape(
+                      doc
+                    )}"]`
+                  );
+                  if (!cell) return;
+
+                  const sel = cell.querySelector("select.select-pot");
+                  const manual = cell.querySelector("input.manual-pot");
+
+                  if (
+                    sel &&
+                    [...sel.options].some((o) => o.value === val && !o.disabled)
+                  ) {
+                    // ✅ l’opzione è ancora valida e abilitata → reimposto e AGGIORNO riepilogo
+                    sel.value = val;
+                    if (manual) {
+                      manual.value = "";
+                      manual.removeAttribute("value");
+                    }
+                    updateSummaryCell(doc, ora, val, sel.dataset.class);
+                  } else if (manual) {
+                    // ✅ se non c'è la select valida, NON travasare val nel manuale (richiesto)
+                    manual.value = "";
+                    manual.removeAttribute("value");
+                    // e svuota l'eventuale cella di riepilogo solo se prima conteneva quella stessa scelta disabilitata
+                    // (in pratica la tabella è già vuota dopo il rerender, quindi non serve altro)
+                  }
+                });
+
+                // 🔧 aggiorna visibilità menu per ogni ora
+                HOURS.forEach(refreshPotVisibilityForHour);
+
+                // 🔥 reset selezioni solo dove l'assente era scelto
+                document
+                  .querySelectorAll("select.select-pot")
+                  .forEach((sel) => {
+                    const val = sel.value.trim().toUpperCase();
+                    if (val && dailyAbsent.has(val)) {
+                      // Se il docente selezionato ora è assente → rimuovilo solo da qui
+                      sel.value = "";
+                      const td = sel.closest("td");
+                      const absent = sel.dataset.absent;
+                      const hour = sel.dataset.hour;
+                      const cls = sel.dataset.class;
+                      updateSummaryCell(absent, hour, "", cls);
+
+                      // Non travasare nel manuale
+                      const man =
+                        sel.parentElement.querySelector("input.manual-pot");
+                      if (man) {
+                        man.value = "";
+                        man.removeAttribute("value");
+                      }
+
+                      // Effetto visivo leggero
+                      td?.classList.add("bg-warning-subtle");
+                      setTimeout(
+                        () => td?.classList.remove("bg-warning-subtle"),
+                        1200
+                      );
+                    }
+                  });
+
+                // ♻️ Se un docente torna presente, riabilita le sue opzioni nei menu
+                HOURS.forEach(refreshPotVisibilityForHour);
               }
             });
           });
@@ -509,9 +592,9 @@
             const box = document.createElement("div");
             box.className = "form-check";
             box.innerHTML = `
-    <input class="form-check-input hourly-box" type="checkbox" id="${id}" data-teacher="${name}" data-hour="${h}" ${checked}>
-    <label class="form-check-label" for="${id}">${h}</label>
-  `;
+      <input class="form-check-input hourly-box" type="checkbox" id="${id}" data-teacher="${name}" data-hour="${h}" ${checked}>
+      <label class="form-check-label" for="${id}">${h}</label>
+    `;
             hourlyGridEl.appendChild(box);
           });
 
@@ -520,14 +603,98 @@
               const who = cb.dataset.teacher;
               const hour = cb.dataset.hour;
               const set = hourlyAbsent.get(who) || new Set();
+
               if (cb.checked) set.add(hour);
               else set.delete(hour);
               if (set.size) hourlyAbsent.set(who, set);
               else hourlyAbsent.delete(who);
 
+              // 🔹 Salva scelte correnti PRIMA di ricreare le tabelle
+              const currentChoices = new Map();
+              document
+                .querySelectorAll("select.select-pot, input.manual-pot")
+                .forEach((el) => {
+                  const key = `${el.dataset.absent}|${el.dataset.hour}`;
+                  const value = el.value?.trim() || "";
+                  if (value) currentChoices.set(key, value);
+                });
+
               renderHourlySummary();
+              renderSubstitutionTables();
+
+              // 🔁 Re-applica scelte dove ancora valide **e aggiorna il riepilogo**
+              currentChoices.forEach((val, key) => {
+                const [doc, ora] = key.split("|");
+                const cell = document.querySelector(
+                  `.table tbody tr td[data-hour="${ora}"][data-absent="${CSS.escape(
+                    doc
+                  )}"]`
+                );
+                if (!cell) return;
+
+                const sel = cell.querySelector("select.select-pot");
+                const manual = cell.querySelector("input.manual-pot");
+
+                if (
+                  sel &&
+                  [...sel.options].some((o) => o.value === val && !o.disabled)
+                ) {
+                  sel.value = val;
+                  if (manual) {
+                    manual.value = "";
+                    manual.removeAttribute("value");
+                  }
+                  updateSummaryCell(doc, ora, val, sel.dataset.class);
+                } else if (manual) {
+                  // Non travasare, come richiesto: lasciamo vuoto il manuale.
+                  manual.value = "";
+                  manual.removeAttribute("value");
+                  // Il riepilogo resterà vuoto per quella cella (scelta ormai non valida).
+                }
+              });
+
               if (!restoring) {
-                renderSubstitutionTables();
+                // ✅ aggiorna solo la visibilità dei menu per quell’ora
+                refreshPotVisibilityForHour(hour);
+
+                // ✅ Se il docente appena segnato assente era selezionato come sostituto in quell'ora
+                //    rimuovilo SOLO da quei menu (lasciando intatti gli altri)
+                document
+                  .querySelectorAll(`select[data-hour='${hour}']`)
+                  .forEach((sel) => {
+                    const currentValue = sel.value.trim().toUpperCase();
+
+                    if (currentValue === who.toUpperCase()) {
+                      sel.value = "";
+                      updateSummaryCell(
+                        sel.dataset.absent,
+                        hour,
+                        "",
+                        sel.dataset.class
+                      );
+
+                      const man =
+                        sel.parentElement.querySelector("input.manual-pot");
+                      if (man) {
+                        man.value = "";
+                        man.removeAttribute("value");
+                      }
+
+                      const td = sel.closest("td");
+                      if (td) {
+                        td.classList.add("bg-warning-subtle");
+                        setTimeout(
+                          () => td.classList.remove("bg-warning-subtle"),
+                          1000
+                        );
+                      }
+                    }
+                  });
+
+                // Se un docente torna presente, riabilitalo nei menu delle stesse ore
+                if (!cb.checked) {
+                  HOURS.forEach(refreshPotVisibilityForHour);
+                }
               }
             });
           });
@@ -712,27 +879,92 @@
           }
         }
 
+        function getSummaryCellName(td) {
+          if (!td) return "";
+          // Prende SOLO la prima riga (prima di <br>) e toglie eventuali " (CLASSE)"
+          const raw = td.textContent ? td.textContent.trim() : "";
+          const firstLine = raw.split("\n")[0].split("<br>")[0].trim();
+          // se è nel formato "NOME (CLASSE)" prendi solo NOME
+          const nameOnly = firstLine.replace(/\s*\(.*?\)\s*$/, "").trim();
+          return nameOnly.toUpperCase();
+        }
+
         function refreshPotVisibilityForHour(hour) {
           const selects = document.querySelectorAll(
             `select[data-hour='${hour}']`
           );
-          const chosen = new Map();
-          selects.forEach((sel) => {
-            if (sel.value)
-              chosen.set(
-                sel.id || `${sel.dataset.absent}|${sel.dataset.class}`,
-                sel.value
-              );
-          });
-          const taken = new Set([...chosen.values()]);
 
           selects.forEach((sel) => {
-            const myValue = sel.value;
+            const currentValue = sel.value.trim().toUpperCase();
+            const absent = sel.dataset.absent;
+            const classe = sel.dataset.class;
+
             sel.querySelectorAll("option[data-pot]").forEach((op) => {
-              const val = op.value;
-              op.disabled = taken.has(val) && val !== myValue;
+              const nome = op.value.trim().toUpperCase();
+
+              const isBanned = BANNED.has(nome);
+              const isAbsentDaily = dailyAbsent.has(nome);
+              const isAbsentHourly =
+                hourlyAbsent.has(nome) && hourlyAbsent.get(nome).has(hour);
+
+              const disabled = isBanned || isAbsentDaily || isAbsentHourly;
+              op.disabled = disabled;
+
+              // 🔹 Se il docente è appena diventato assente e compare come sostituto, resetta la cella
+              if (disabled && currentValue === nome) {
+                sel.value = "";
+
+                // Svuota riepilogo per la stessa cella
+                updateSummaryCell(absent, hour, "", classe);
+
+                // Non travasare nel manuale
+                const man = sel.parentElement.querySelector("input.manual-pot");
+                if (man) {
+                  man.value = "";
+                  man.removeAttribute("value");
+                }
+
+                // Feedback visivo
+                const td = sel.closest("td");
+                if (td) {
+                  td.classList.add("bg-warning-subtle");
+                  setTimeout(
+                    () => td.classList.remove("bg-warning-subtle"),
+                    1000
+                  );
+                }
+              }
             });
+
+            // ✅ Mantieni selezione se ancora valida (cioè non disabilitata)
+            if (
+              currentValue &&
+              !sel.querySelector(`option[value='${currentValue}']:disabled`)
+            ) {
+              sel.value = currentValue;
+            }
           });
+
+          // 🔹 Rimuovi dal riepilogo eventuali sostituti che ora risultano assenti
+          // 🔹 Rimuovi dal riepilogo eventuali sostituti che ora risultano assenti
+          document
+            .querySelectorAll(`#summary-grid td[data-hour='${hour}']`)
+            .forEach((td) => {
+              const cand = getSummaryCellName(td); // ← usa solo il NOME
+              if (!cand) return;
+
+              const absentDaily = dailyAbsent.has(cand);
+              const absentHourly =
+                hourlyAbsent.has(cand) && hourlyAbsent.get(cand).has(hour);
+
+              if (absentDaily || absentHourly) {
+                td.innerHTML = "";
+                // opzionale: pulizia dei dataset “di stato” se presenti
+                delete td.dataset.comp;
+                delete td.dataset.pot;
+                delete td.dataset.permesso;
+              }
+            });
         }
 
         // =====================================================
@@ -842,14 +1074,29 @@
           <div class="comp-text">${label}</div></td>`;
               } else {
                 // 🔹 Determina i docenti POT disponibili in quell’ora
-                const potSlots = scheduleData.filter(
-                  (r) =>
-                    normalizzaGiorno(r.Giorno) ===
-                      normalizzaGiorno(giornoEsteso) &&
-                    r.OraInizio === lez.OraInizio &&
-                    r.OraFine === lez.OraFine &&
-                    r.isPOT === true
-                );
+                const potSlots = scheduleData.filter((r) => {
+                  if (
+                    normalizzaGiorno(r.Giorno) !==
+                      normalizzaGiorno(giornoEsteso) ||
+                    r.OraInizio !== lez.OraInizio ||
+                    r.OraFine !== lez.OraFine ||
+                    !r.isPOT
+                  )
+                    return false;
+
+                  const nome = (r.Docente || "").trim().toUpperCase();
+
+                  // 🔴 Escludi i docenti bannati o assenti (giornalieri/orari)
+                  const isBanned = BANNED.has(nome);
+                  const isAbsentDaily = dailyAbsent.has(nome);
+                  const isAbsentHourly =
+                    hourlyAbsent.has(nome) &&
+                    hourlyAbsent
+                      .get(nome)
+                      .has(`${lez.OraInizio}-${lez.OraFine}`);
+
+                  return !isBanned && !isAbsentDaily && !isAbsentHourly;
+                });
 
                 if (potSlots.length === 0) {
                   // Nessun POT -> campo manuale
@@ -946,14 +1193,29 @@
                 html += `<td data-hour="${hour}" data-absent="${docente}">
           <div class="comp-text">${label}</div></td>`;
               } else {
-                const potSlots = scheduleData.filter(
-                  (r) =>
-                    normalizzaGiorno(r.Giorno) ===
-                      normalizzaGiorno(giornoEsteso) &&
-                    r.OraInizio === lez.OraInizio &&
-                    r.OraFine === lez.OraFine &&
-                    r.isPOT === true
-                );
+                const potSlots = scheduleData.filter((r) => {
+                  if (
+                    normalizzaGiorno(r.Giorno) !==
+                      normalizzaGiorno(giornoEsteso) ||
+                    r.OraInizio !== lez.OraInizio ||
+                    r.OraFine !== lez.OraFine ||
+                    !r.isPOT
+                  )
+                    return false;
+
+                  const nome = (r.Docente || "").trim().toUpperCase();
+
+                  // 🔴 Escludi i docenti bannati o assenti (giornalieri/orari)
+                  const isBanned = BANNED.has(nome);
+                  const isAbsentDaily = dailyAbsent.has(nome);
+                  const isAbsentHourly =
+                    hourlyAbsent.has(nome) &&
+                    hourlyAbsent
+                      .get(nome)
+                      .has(`${lez.OraInizio}-${lez.OraFine}`);
+
+                  return !isBanned && !isAbsentDaily && !isAbsentHourly;
+                });
 
                 if (potSlots.length === 0) {
                   html += `<td data-hour="${hour}" data-absent="${docente}">
@@ -1072,16 +1334,23 @@
                 const opt = [...sel.options].find(
                   (o) => o.value.trim() === (Sostituto || "").trim()
                 );
-                if (opt) {
+
+                if (opt && !opt.disabled) {
+                  // ✅ L’opzione esiste ed è valida → ripristina
                   sel.disabled = false;
                   sel.value = Sostituto;
                   if (manual) manual.value = "";
                 } else {
+                  // ✅ L’opzione non esiste più o è disabilitata → svuota senza travasare
                   sel.value = "";
-                  sel.disabled = true;
-                  if (manual) manual.value = Sostituto || "";
+                  sel.disabled = false; // lasciamo il menu attivo per nuove scelte
+                  if (manual) {
+                    manual.value = "";
+                    manual.removeAttribute("value");
+                  }
                 }
               } else if (manual) {
+                // Se non c’è select ma solo campo manuale → ripristina normalmente
                 manual.value = Sostituto || "";
               }
             });
