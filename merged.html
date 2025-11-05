@@ -109,6 +109,39 @@
       td.needs-attention {
         background-color: #fff3f3 !important; /* leggero rosato */
       }
+
+      /* Evidenziazione campi non compilati */
+      td.needs-attention {
+        background-color: #fff3cd !important; /* giallo Bootstrap warning */
+        transition: background-color 0.4s ease;
+      }
+
+      select.is-invalid,
+      input.is-invalid {
+        border-color: #dc3545 !important; /* rosso Bootstrap danger */
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+      }
+
+      /* effetto leggero quando l'utente rivede i campi */
+      .bg-warning-subtle {
+        background-color: #fff8e1 !important;
+      }
+
+      /* Evidenziazione campi non compilati */
+      td.needs-attention {
+        background-color: #fff3cd !important; /* giallo warning */
+        transition: background-color 0.4s ease;
+      }
+
+      select.is-invalid,
+      input.is-invalid {
+        border-color: #dc3545 !important; /* rosso Bootstrap danger */
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+      }
+
+      .bg-warning-subtle {
+        background-color: #fff8e1 !important;
+      }
     </style>
   </head>
   <body>
@@ -323,6 +356,12 @@
               obj.isPOT = true; // flag interno
             } else {
               obj.isPOT = false;
+            }
+            if (obj.Classe && /\(S\)\s*$/.test(obj.Classe)) {
+              obj.Classe = obj.Classe.replace(/\(S\)\s*$/, "").trim(); // rimuovi (P) in visualizzazione
+              obj.isSOSTEGNO = true; // flag interno
+            } else {
+              obj.isSOSTEGNO = false;
             }
             return obj;
           });
@@ -1061,6 +1100,9 @@
           docente,
           giornoEsteso
         ) {
+          const hourKey = `${oraInizio}-${oraFine}`;
+
+          // tutti i docenti (oltre all'assente) presenti in quella classe/ora
           const compresenti = scheduleData.filter(
             (r) =>
               normalizzaGiorno(r.Giorno || "") ===
@@ -1071,43 +1113,28 @@
               (r.Docente || "").trim() !== (docente || "").trim()
           );
 
-          if (compresenti.length === 0)
+          if (compresenti.length === 0) {
             return {
               stato: false,
               compresente: null,
               reciproca: false,
               partner: [],
             };
+          }
 
           const compresentiNomi = compresenti.map((r) =>
             (r.Docente || "").trim()
           );
-          const assenti = [...(dailyAbsent.keys ? dailyAbsent : [])].map(
-            (a) => a
-          );
-          const assentiOrari = [...(hourlyAbsent.keys ? hourlyAbsent : [])].map(
-            (a) => a
-          );
 
-          const tuttiAssenti = compresentiNomi.every(
-            (a) => dailyAbsent.has(a) || hourlyAbsent.has(a)
-          );
+          // assente "in quell'ora": assente giornaliero OPPURE assente orario su hourKey
+          const isAbsentThisHour = (name) =>
+            isDailyAbsent(name) ||
+            (hourlyAbsent.has(name) && hourlyAbsent.get(name).has(hourKey));
 
-          // 🔁 Caso 1: tutti assenti → compresenza reciproca
-          if (tuttiAssenti && compresentiNomi.length === 1) {
-            return {
-              stato: false,
-              compresente: null,
-              reciproca: true,
-              partner: compresentiNomi,
-            };
-          }
-
-          // 🔁 Caso 2: almeno uno presente → compresenza semplice
-          const presenti = compresentiNomi.filter(
-            (n) => !dailyAbsent.has(n) && !hourlyAbsent.has(n)
-          );
+          // 1) c'è almeno un compresente presente in quell'ora?
+          const presenti = compresentiNomi.filter((n) => !isAbsentThisHour(n));
           if (presenti.length > 0) {
+            // c'è compresenza → nessuna sostituzione necessaria
             return {
               stato: true,
               compresente: presenti[0],
@@ -1116,6 +1143,19 @@
             };
           }
 
+          // 2) tutti i compresenti sono assenti in quell'ora
+          const tuttiAssenti = compresentiNomi.every(isAbsentThisHour);
+          if (tuttiAssenti) {
+            // compresenza "reciproca": entrambi (o tutti) assenti nella stessa ora
+            return {
+              stato: false,
+              compresente: null,
+              reciproca: true,
+              partner: compresentiNomi, // serve a renderSubstitutionTables per il controllo condiviso
+            };
+          }
+
+          // fallback: niente compresenza utile -> richiede sostituzione
           return {
             stato: false,
             compresente: null,
@@ -1174,6 +1214,13 @@
 
               if (!lez) {
                 html += `<td data-hour="${hour}" data-absent="${docente}"></td>`;
+                return;
+              }
+
+              if (lez.isSOSTEGNO) {
+                html += `<td data-hour="${hour}" data-absent="${docente}">
+              <div class="comp-text text-center">In compresenza</div>
+           </td>`;
                 return;
               }
 
@@ -1314,6 +1361,13 @@
               );
               if (!lez) {
                 html += `<td data-hour="${hour}" data-absent="${docente}"></td>`;
+                return;
+              }
+
+              if (lez.isSOSTEGNO) {
+                html += `<td data-hour="${hour}" data-absent="${docente}">
+              <div class="comp-text text-center">In compresenza</div>
+           </td>`;
                 return;
               }
 
@@ -1602,6 +1656,99 @@
 
           // copia le compresenze automatiche nel riepilogo
           updateSummaryForCompresenze();
+        }
+
+        // ====== SALVATAGGIO CSV & PDF ======
+        async function uploadCsvToServer(csvContent, filename, remotePath) {
+          try {
+            const formData = new FormData();
+            formData.append("path", remotePath);
+            formData.append("filename", filename);
+            formData.append("csv_content", csvContent);
+
+            const response = await fetch(phpScriptUrl, {
+              method: "POST",
+              body: formData,
+            });
+            const result = await response.json();
+
+            if (response.ok && result.status === "success") {
+              showToast(
+                `<i class="bi bi-cloud-check-fill me-2"></i> Riepilogo salvato sul server`
+              );
+            } else {
+              showToast(
+                `<i class="bi bi-cloud-slash-fill me-2"></i> Errore salvataggio: ${
+                  result.message || "sconosciuto"
+                }`,
+                "alert-danger"
+              );
+            }
+          } catch (error) {
+            showToast(
+              `<i class="bi bi-cloud-slash-fill me-2"></i> Errore rete salvataggio`,
+              "alert-danger"
+            );
+          }
+        }
+
+        // === AGGIORNA riepilogo per compresenze ===
+        function updateSummaryForCompresenze() {
+          // 1️⃣ Copia tutte le celle .comp-text nel riepilogo
+          document.querySelectorAll(".comp-text").forEach((cell) => {
+            const row = cell.closest("tr");
+            if (!row) return;
+
+            const docente = row
+              .querySelector("td:first-child")
+              ?.textContent?.trim();
+            const hourHeader = cell
+              .closest("table")
+              ?.querySelectorAll("thead th");
+            const colIndex = Array.from(
+              cell.parentNode.parentNode.children
+            ).indexOf(cell.parentNode);
+            const hour =
+              hourHeader && hourHeader[colIndex]
+                ? hourHeader[colIndex].textContent.trim()
+                : null;
+
+            if (docente && hour) {
+              const summaryRow = document.querySelector(
+                `#summary-grid tbody tr[data-absent="${CSS.escape(docente)}"]`
+              );
+              if (summaryRow) {
+                const summaryCell = summaryRow.querySelector(
+                  `td[data-hour="${hour}"]`
+                );
+                if (summaryCell) {
+                  summaryCell.innerHTML = cell.outerHTML; // copia lo stesso contenuto
+                  summaryCell.dataset.comp = "1";
+                }
+              }
+            }
+          });
+
+          // 2️⃣ Gestione aggiuntiva: docenti di sostegno (mai sostituiti)
+          scheduleData.forEach((lez) => {
+            if (lez.isSOSTEGNO) {
+              const docente = (lez.Docente || "").trim();
+              const ora = `${lez.OraInizio}-${lez.OraFine}`;
+              const summaryRow = document.querySelector(
+                `#summary-grid tbody tr[data-absent="${CSS.escape(docente)}"]`
+              );
+              if (summaryRow) {
+                const summaryCell = summaryRow.querySelector(
+                  `td[data-hour="${ora}"]`
+                );
+                if (summaryCell) {
+                  summaryCell.innerHTML =
+                    '<div class="comp-text text-center">In compresenza</div>';
+                  summaryCell.dataset.comp = "1";
+                }
+              }
+            }
+          });
         }
 
         // ====== SALVATAGGIO CSV & PDF ======
@@ -2267,16 +2414,125 @@
         const btn = e.target.closest("#export-pdf-btn");
         if (!btn) return;
 
-        try {
-          console.log("[EXPORT] Avvio generazione PDF + salvataggio CSV...");
-          await window.exportPdfAndSave();
-        } catch (err) {
-          console.error("[EXPORT] Errore durante l’esportazione:", err);
-          window.showToast(
-            `<i class="bi bi-exclamation-triangle-fill me-2"></i> Errore durante la generazione del PDF.`,
-            "alert-danger"
-          );
+        e.preventDefault();
+        const missing = [];
+
+        // 🔎 Controlla i campi vuoti (select e input manuali)
+        document.querySelectorAll("td[data-hour]").forEach((td) => {
+          const sel = td.querySelector("select.select-pot");
+          const manual = td.querySelector("input.manual-pot");
+
+          // Valori effettivi dei campi
+          const selVal = sel && !sel.disabled ? sel.value.trim() : "";
+          const manVal = manual && !manual.disabled ? manual.value.trim() : "";
+
+          // reset stile
+          td.classList.remove("needs-attention");
+          sel && sel.classList.remove("is-invalid");
+          manual && manual.classList.remove("is-invalid");
+
+          // Campo manuale o select vuoto → segnalazione
+          if (
+            (sel && !selVal && manual && !manVal) || // entrambi vuoti
+            (!sel && manual && !manVal) // solo manuale presente e vuoto
+          ) {
+            td.classList.add("needs-attention");
+            sel && sel.classList.add("is-invalid");
+            manual && manual.classList.add("is-invalid");
+            missing.push(td);
+          }
+        });
+
+        // ✅ Se tutto compilato → genera subito PDF e salva CSV
+        if (missing.length === 0) {
+          try {
+            console.log("[EXPORT] Avvio generazione PDF + salvataggio CSV...");
+            await window.exportPdfAndSave();
+          } catch (err) {
+            console.error("[EXPORT] Errore durante l’esportazione:", err);
+            window.showToast(
+              `<i class="bi bi-exclamation-triangle-fill me-2"></i> Errore durante la generazione del PDF.`,
+              "alert-danger"
+            );
+          }
+          return;
         }
+
+        // ⚠️ Se ci sono campi mancanti → mostra modale Bootstrap di conferma
+        const modalHtml = `
+    <div class="modal fade" id="confirmMissingModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-danger">
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              Campi non compilati
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            Alcuni campi (inclusi quelli manuali) non sono stati compilati.<br>
+            Vuoi procedere comunque alla generazione del PDF e al salvataggio del riepilogo?
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="reviewMissingBtn">
+              <i class="bi bi-arrow-left-circle me-1"></i> Rivedi campi
+            </button>
+            <button type="button" class="btn btn-danger" id="confirmProceedBtn">
+              <i class="bi bi-file-earmark-pdf me-1"></i> Procedi comunque
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+        // Inserisci la modale nel DOM se non esiste già
+        if (!document.getElementById("confirmMissingModal")) {
+          document.body.insertAdjacentHTML("beforeend", modalHtml);
+        }
+
+        const modalEl = document.getElementById("confirmMissingModal");
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        // 🟡 Pulsante "Rivedi campi" → evidenzia e scrolla al primo mancante
+        modalEl
+          .querySelector("#reviewMissingBtn")
+          .addEventListener("click", () => {
+            modal.hide();
+            missing.forEach((td) => {
+              td.classList.add("bg-warning-subtle");
+              setTimeout(() => td.classList.remove("bg-warning-subtle"), 2500);
+            });
+            // Scrolla al primo campo non compilato
+            missing[0].scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+
+        // 🔴 Pulsante "Procedi comunque" → rimuove evidenziazioni e genera PDF
+        modalEl
+          .querySelector("#confirmProceedBtn")
+          .addEventListener("click", async () => {
+            modal.hide();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            // Rimuovi eventuali evidenziazioni
+            document.querySelectorAll(".needs-attention").forEach((td) => {
+              td.classList.remove("needs-attention", "bg-warning-subtle");
+            });
+            document
+              .querySelectorAll(".is-invalid")
+              .forEach((el) => el.classList.remove("is-invalid"));
+
+            try {
+              console.log("[EXPORT] Procedo nonostante campi mancanti...");
+              await window.exportPdfAndSave();
+            } catch (err) {
+              console.error("[EXPORT] Errore durante l’esportazione:", err);
+              window.showToast(
+                `<i class="bi bi-exclamation-triangle-fill me-2"></i> Errore durante la generazione del PDF.`,
+                "alert-danger"
+              );
+            }
+          });
       });
     </script>
     <!-- Bootstrap JS (necessario per il modal e altri componenti dinamici) -->
