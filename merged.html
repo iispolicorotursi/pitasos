@@ -968,6 +968,53 @@
           }
         }
 
+        // 🔒 Disabilita un docente selezionato come sostituto in tutte le altre select della stessa ora
+        function disableChosenSubstituteForHour(selectedName, hour) {
+          if (!selectedName || !hour) return;
+
+          // Scorri tutte le select della stessa ora
+          document
+            .querySelectorAll(`select[data-hour='${hour}']`)
+            .forEach((sel) => {
+              const nomeU = selectedName.trim().toUpperCase();
+              // Se il valore della select è già selezionato, salta
+              if (sel.value.trim().toUpperCase() === nomeU) return;
+
+              sel.querySelectorAll("option").forEach((op) => {
+                if (op.value.trim().toUpperCase() === nomeU) {
+                  op.disabled = true;
+                }
+              });
+            });
+        }
+
+        // 🔓 Riabilita un docente come sostituto nelle select della stessa ora se non è più usato altrove
+        function reenableSubstituteIfFree(selectedName, hour) {
+          if (!selectedName || !hour) return;
+
+          const isStillUsed = Array.from(
+            document.querySelectorAll(`select[data-hour='${hour}']`)
+          ).some(
+            (sel) =>
+              sel.value.trim().toUpperCase() ===
+              selectedName.trim().toUpperCase()
+          );
+
+          // Se non più usato, riabilitalo
+          if (!isStillUsed) {
+            document
+              .querySelectorAll(`select[data-hour='${hour}'] option`)
+              .forEach((op) => {
+                if (
+                  op.value.trim().toUpperCase() ===
+                  selectedName.trim().toUpperCase()
+                ) {
+                  op.disabled = false;
+                }
+              });
+          }
+        }
+
         function getSummaryCellName(td) {
           if (!td) return "";
           // Prende SOLO la prima riga (prima di <br>) e toglie eventuali " (CLASSE)"
@@ -1617,24 +1664,42 @@
             });
           });
 
-          // Listeners standard: aggiorna riepilogo quando scelgo un sostituto
           document.querySelectorAll(".select-pot").forEach((sel) => {
             sel.addEventListener("change", (e) => {
               const s = e.target;
               const man = s.parentElement.querySelector(".manual-pot");
-              if (s.value) {
+              const prevValue = s.dataset.prevValue || "";
+              const newValue = s.value.trim();
+
+              // pulizia manual field
+              if (newValue) {
                 if (man) {
                   man.value = "";
                   man.removeAttribute("value");
                 }
               }
+
+              // aggiorna riepilogo
               updateSummaryCell(
                 s.dataset.absent,
                 s.dataset.hour,
-                s.value || "",
+                newValue || "",
                 s.dataset.class
               );
+
+              // 🔧 aggiorna visibilità dei menu
               refreshPotVisibilityForHour(s.dataset.hour);
+
+              // 🔒 Disabilita il docente appena scelto per quell'ora in altri menu
+              if (newValue)
+                disableChosenSubstituteForHour(newValue, s.dataset.hour);
+
+              // 🔓 Riabilita il precedente (se non più usato altrove)
+              if (prevValue && prevValue !== newValue)
+                reenableSubstituteIfFree(prevValue, s.dataset.hour);
+
+              // aggiorna valore precedente
+              s.dataset.prevValue = newValue;
             });
           });
 
