@@ -1604,6 +1604,11 @@
                 updateSummaryCell(docenteAssente, ora, Sostituto, Classe);
               }
             });
+
+            // 🔄 Imposta dataset.prevValue per tutte le select ripristinate (serve a riabilitare correttamente i docenti)
+            document.querySelectorAll(".select-pot").forEach((sel) => {
+              sel.dataset.prevValue = sel.value.trim();
+            });
           }
 
           // ==========================================================
@@ -1721,6 +1726,29 @@
 
           // copia le compresenze automatiche nel riepilogo
           updateSummaryForCompresenze();
+
+          // 🔁 Dopo il render completo, aggiorna i menu disabilitando i sostituti già usati per ciascuna ora
+          HOURS.forEach((hour) => {
+            const used = new Set();
+            document
+              .querySelectorAll(`select[data-hour='${hour}']`)
+              .forEach((sel) => {
+                const val = sel.value.trim();
+                if (val) used.add(val.toUpperCase());
+              });
+            // Disabilita per tutti gli altri menu
+            used.forEach((name) => {
+              document
+                .querySelectorAll(`select[data-hour='${hour}']`)
+                .forEach((sel) => {
+                  if (sel.value.trim().toUpperCase() === name) return;
+                  sel.querySelectorAll("option").forEach((op) => {
+                    if (op.value.trim().toUpperCase() === name)
+                      op.disabled = true;
+                  });
+                });
+            });
+          });
         }
 
         // ====== SALVATAGGIO CSV & PDF ======
