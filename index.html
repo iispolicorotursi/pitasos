@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
@@ -272,6 +272,7 @@
           "RINA T.",
           "BRUNO E.",
           "BATTIFARANO C.",
+          "CLAUDE J.",
         ]);
 
         const dateInput = document.getElementById("date-input");
@@ -315,7 +316,7 @@
         // Data odierna di default
         const oggi = new Date();
         dateInput.value = `${oggi.getFullYear()}-${String(
-          oggi.getMonth() + 1
+          oggi.getMonth() + 1,
         ).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
 
         // ====== UTILS ======
@@ -342,7 +343,7 @@
 
         async function loadOrario() {
           const text = await fetch(orarioFile, { cache: "no-store" }).then(
-            (r) => r.text()
+            (r) => r.text(),
           );
           const lines = text.trim().split("\n");
           const headers = lines[0].split(",").map((h) => h.trim());
@@ -469,10 +470,10 @@
                 .filter(
                   (r) =>
                     normalizzaGiorno(r.Giorno) ===
-                    normalizzaGiorno(giornoEsteso)
+                    normalizzaGiorno(giornoEsteso),
                 )
                 .map((r) => (r.Docente || "").trim())
-                .filter(Boolean)
+                .filter(Boolean),
             ),
           ]
             .filter((n) => !BANNED.has(n))
@@ -539,8 +540,8 @@
 
                   const cell = document.querySelector(
                     `.table tbody tr td[data-hour="${ora}"][data-absent="${CSS.escape(
-                      doc
-                    )}"]`
+                      doc,
+                    )}"]`,
                   );
                   if (!cell) return;
 
@@ -550,7 +551,7 @@
                   if (
                     sel &&
                     [...sel.options].some(
-                      (o) => o.value.trim() === sostituto && !o.disabled
+                      (o) => o.value.trim() === sostituto && !o.disabled,
                     )
                   ) {
                     sel.value = sostituto;
@@ -612,7 +613,7 @@
                       td?.classList.add("bg-warning-subtle");
                       setTimeout(
                         () => td?.classList.remove("bg-warning-subtle"),
-                        1200
+                        1200,
                       );
                     }
                   });
@@ -639,10 +640,10 @@
                 .filter(
                   (r) =>
                     normalizzaGiorno(r.Giorno) ===
-                    normalizzaGiorno(giornoEsteso)
+                    normalizzaGiorno(giornoEsteso),
                 )
                 .map((r) => (r.Docente || "").trim())
-                .filter(Boolean)
+                .filter(Boolean),
             ),
           ]
             .filter((n) => !BANNED.has(n))
@@ -727,7 +728,7 @@
                         sel.dataset.absent,
                         hour,
                         "",
-                        sel.dataset.class
+                        sel.dataset.class,
                       );
 
                       const td = sel.closest("td");
@@ -735,7 +736,7 @@
                         td.classList.add("bg-warning-subtle");
                         setTimeout(
                           () => td.classList.remove("bg-warning-subtle"),
-                          1000
+                          1000,
                         );
                       }
                     }
@@ -768,8 +769,8 @@
 
                   const cell = document.querySelector(
                     `.table tbody tr td[data-hour="${ora}"][data-absent="${CSS.escape(
-                      doc
-                    )}"]`
+                      doc,
+                    )}"]`,
                   );
                   if (!cell) return;
 
@@ -779,7 +780,7 @@
                   if (
                     sel &&
                     [...sel.options].some(
-                      (o) => o.value.trim() === sostituto && !o.disabled
+                      (o) => o.value.trim() === sostituto && !o.disabled,
                     )
                   ) {
                     sel.value = sostituto;
@@ -821,12 +822,12 @@
             .sort((a, b) => a.localeCompare(b))
             .forEach((name) => {
               const ore = Array.from(hourlyAbsent.get(name)).sort((a, b) =>
-                a.localeCompare(b)
+                a.localeCompare(b),
               );
               rows.push(
                 `<div><i class="bi bi-person-fill text-primary me-1"></i><strong>${name}</strong>: ${ore.join(
-                  ", "
-                )}</div>`
+                  ", ",
+                )}</div>`,
               );
             });
           hourlySummaryEl.innerHTML = rows.join("");
@@ -845,7 +846,7 @@
               normalizzaGiorno(r.Giorno || "") ===
                 normalizzaGiorno(giornoEsteso) &&
               r.isPOT === true &&
-              !BANNED.has((r.Docente || "").trim())
+              !BANNED.has((r.Docente || "").trim()),
           );
         }
 
@@ -856,7 +857,7 @@
                 normalizzaGiorno(giornoEsteso) &&
               (r.Classe || "").trim() === (classe || "").trim() &&
               r.OraInizio === oi &&
-              r.OraFine === of
+              r.OraFine === of,
           );
         }
 
@@ -867,11 +868,11 @@
           oi,
           of,
           docenteAssente,
-          giornoEsteso
+          giornoEsteso,
         ) {
           const all = teachersInClassAt(classe, oi, of, giornoEsteso);
           const others = all.filter(
-            (t) => (t.Docente || "").trim() !== (docenteAssente || "").trim()
+            (t) => (t.Docente || "").trim() !== (docenteAssente || "").trim(),
           );
           if (!others.length) {
             return {
@@ -894,7 +895,7 @@
           if (othersPresent.length) {
             // Regola speciale: se l’assente è POT e c'è un disciplinare presente → non serve sostituzione
             const assenteRow = all.find(
-              (r) => (r.Docente || "").trim() === (docenteAssente || "").trim()
+              (r) => (r.Docente || "").trim() === (docenteAssente || "").trim(),
             );
             const isAbsentPOT = !!(assenteRow && assenteRow.isPOT);
             const anyDiscPresent = othersPresent.some((r) => r.isPOT === false);
@@ -920,7 +921,7 @@
           if (hasDisc && hasPOT) {
             // Se l’assente attuale è POT, non richiedere sostituto (si coprirà sul disciplinare)
             const current = all.find(
-              (r) => (r.Docente || "").trim() === (docenteAssente || "").trim()
+              (r) => (r.Docente || "").trim() === (docenteAssente || "").trim(),
             );
             const isCurrentPOT = !!(current && current.isPOT);
             if (isCurrentPOT) {
@@ -951,8 +952,8 @@
         function updateSummaryCell(absent, hour, text, className) {
           const cell = document.querySelector(
             `#summary-grid tbody tr[data-absent="${CSS.escape(
-              absent
-            )}"] td[data-hour="${hour}"]`
+              absent,
+            )}"] td[data-hour="${hour}"]`,
           );
           if (!cell) return;
           if (!text) {
@@ -1016,11 +1017,11 @@
           if (!selectedName || !hour) return;
 
           const isStillUsed = Array.from(
-            document.querySelectorAll(`select[data-hour='${hour}']`)
+            document.querySelectorAll(`select[data-hour='${hour}']`),
           ).some(
             (sel) =>
               sel.value.trim().toUpperCase() ===
-              selectedName.trim().toUpperCase()
+              selectedName.trim().toUpperCase(),
           );
 
           // Se non più usato, riabilitalo
@@ -1050,7 +1051,7 @@
 
         function refreshPotVisibilityForHour(hour) {
           const selects = document.querySelectorAll(
-            `select[data-hour='${hour}']`
+            `select[data-hour='${hour}']`,
           );
 
           selects.forEach((sel) => {
@@ -1093,7 +1094,7 @@
                   td.classList.add("bg-warning-subtle");
                   setTimeout(
                     () => td.classList.remove("bg-warning-subtle"),
-                    800
+                    800,
                   );
                 }
               }
@@ -1103,7 +1104,7 @@
             const giornoEsteso =
               giorniEstesi[new Date(dateInput.value).getUTCDay()];
             const existingNames = [...sel.options].map((o) =>
-              o.value.trim().toUpperCase()
+              o.value.trim().toUpperCase(),
             );
 
             scheduleData
@@ -1112,7 +1113,7 @@
                   normalizzaGiorno(r.Giorno) ===
                     normalizzaGiorno(giornoEsteso) &&
                   r.isPOT &&
-                  `${r.OraInizio}-${r.OraFine}` === hour
+                  `${r.OraInizio}-${r.OraFine}` === hour,
               )
               .forEach((r) => {
                 const nome = (r.Docente || "").trim();
@@ -1168,7 +1169,7 @@
           oraInizio,
           oraFine,
           docente,
-          giornoEsteso
+          giornoEsteso,
         ) {
           const hourKey = `${oraInizio}-${oraFine}`;
 
@@ -1180,7 +1181,7 @@
               (r.Classe || "").trim() === (classe || "").trim() &&
               r.OraInizio === oraInizio &&
               r.OraFine === oraFine &&
-              (r.Docente || "").trim() !== (docente || "").trim()
+              (r.Docente || "").trim() !== (docente || "").trim(),
           );
 
           if (compresenti.length === 0) {
@@ -1193,7 +1194,7 @@
           }
 
           const compresentiNomi = compresenti.map((r) =>
-            (r.Docente || "").trim()
+            (r.Docente || "").trim(),
           );
 
           // assente "in quell'ora": assente giornaliero OPPURE assente orario su hourKey
@@ -1263,7 +1264,7 @@
                       <tr>
                         <th class="teacher-cell">Docente assente</th>
                         ${HOURS.map(
-                          (h) => `<th class="hour-col text-center">${h}</th>`
+                          (h) => `<th class="hour-col text-center">${h}</th>`,
                         ).join("")}
                       </tr>
                     </thead>
@@ -1279,7 +1280,7 @@
                   normalizzaGiorno(r.Giorno) ===
                     normalizzaGiorno(giornoEsteso) &&
                   (r.Docente || "").trim() === docente &&
-                  `${r.OraInizio}-${r.OraFine}` === hour
+                  `${r.OraInizio}-${r.OraFine}` === hour,
               );
 
               if (!lez) {
@@ -1301,7 +1302,7 @@
                 lez.OraInizio,
                 lez.OraFine,
                 docente,
-                giornoEsteso
+                giornoEsteso,
               );
 
               if (comp.stato) {
@@ -1321,7 +1322,7 @@
                       normalizzaGiorno(giornoEsteso) &&
                     p.OraInizio === lez.OraInizio &&
                     p.OraFine === lez.OraFine &&
-                    !BANNED.has((p.Docente || "").trim().toUpperCase())
+                    !BANNED.has((p.Docente || "").trim().toUpperCase()),
                 );
 
                 html += `<td data-hour="${hour}" data-absent="${docente}" data-class="${classe}">
@@ -1338,7 +1339,7 @@
                                 ${potSlots
                                   .map(
                                     (p) =>
-                                      `<option value="${p.Docente.trim()}">${p.Docente.trim()}</option>`
+                                      `<option value="${p.Docente.trim()}">${p.Docente.trim()}</option>`,
                                   )
                                   .join("")}
                               </select>
@@ -1378,7 +1379,7 @@
                                   ${potSlots
                                     .map(
                                       (p) =>
-                                        `<option value="${p.Docente.trim()}">${p.Docente.trim()}</option>`
+                                        `<option value="${p.Docente.trim()}">${p.Docente.trim()}</option>`,
                                     )
                                     .join("")}
                                 </select>
@@ -1408,7 +1409,7 @@
                       <tr>
                         <th class="teacher-cell">Docente assente</th>
                         ${HOURS.map(
-                          (h) => `<th class="hour-col text-center">${h}</th>`
+                          (h) => `<th class="hour-col text-center">${h}</th>`,
                         ).join("")}
                       </tr>
                     </thead>
@@ -1428,7 +1429,7 @@
                   normalizzaGiorno(r.Giorno) ===
                     normalizzaGiorno(giornoEsteso) &&
                   (r.Docente || "").trim() === docente &&
-                  `${r.OraInizio}-${r.OraFine}` === hour
+                  `${r.OraInizio}-${r.OraFine}` === hour,
               );
               if (!lez) {
                 html += `<td data-hour="${hour}" data-absent="${docente}"></td>`;
@@ -1449,7 +1450,7 @@
                 lez.OraInizio,
                 lez.OraFine,
                 docente,
-                giornoEsteso
+                giornoEsteso,
               );
 
               if (comp.stato) {
@@ -1468,7 +1469,7 @@
                       normalizzaGiorno(giornoEsteso) &&
                     p.OraInizio === lez.OraInizio &&
                     p.OraFine === lez.OraFine &&
-                    !BANNED.has((p.Docente || "").trim().toUpperCase())
+                    !BANNED.has((p.Docente || "").trim().toUpperCase()),
                 );
 
                 html += `<td data-hour="${hour}" data-absent="${docente}" data-class="${classe}">
@@ -1484,7 +1485,7 @@
                                 ${potSlots
                                   .map(
                                     (p) =>
-                                      `<option value="${p.Docente.trim()}">${p.Docente.trim()}</option>`
+                                      `<option value="${p.Docente.trim()}">${p.Docente.trim()}</option>`,
                                   )
                                   .join("")}
                               </select>
@@ -1526,7 +1527,7 @@
                         <tr>
                           <th class="teacher-cell">Docente assente</th>
                           ${HOURS.map(
-                            (h) => `<th class="hour-col text-center">${h}</th>`
+                            (h) => `<th class="hour-col text-center">${h}</th>`,
                           ).join("")}
                         </tr>
                       </thead>
@@ -1538,9 +1539,9 @@
                             <td>${nome}</td>
                             ${HOURS.map(
                               (h) =>
-                                `<td data-hour="${h}" data-absent="${nome}" class="text-center"></td>`
+                                `<td data-hour="${h}" data-absent="${nome}" class="text-center"></td>`,
                             ).join("")}
-                          </tr>`
+                          </tr>`,
                           )
                           .join("")}
                       </tbody>
@@ -1590,7 +1591,7 @@
                   docenteAssente,
                   ora,
                   "Permesso orario",
-                  Classe
+                  Classe,
                 );
                 return;
               }
@@ -1599,8 +1600,8 @@
               if (Sostituto) {
                 const cell = document.querySelector(
                   `.table tbody tr td[data-hour="${ora}"][data-absent="${CSS.escape(
-                    docenteAssente
-                  )}"]`
+                    docenteAssente,
+                  )}"]`,
                 );
                 // La cella può non esistere se era compresenza con partner presente.
                 if (cell) {
@@ -1611,7 +1612,7 @@
                   if (
                     sel &&
                     [...sel.options].some(
-                      (o) => o.value.trim() === Sostituto.trim() && !o.disabled
+                      (o) => o.value.trim() === Sostituto.trim() && !o.disabled,
                     )
                   ) {
                     sel.disabled = false;
@@ -1686,7 +1687,7 @@
               const peerTds = new Set(
                 allPeers
                   .map((el) => el.closest("td[data-absent]"))
-                  .filter(Boolean)
+                  .filter(Boolean),
               );
               peerTds.forEach((td) => {
                 updateSummaryCell(td.dataset.absent, hour, val, classe);
@@ -1714,7 +1715,7 @@
                 s.dataset.absent,
                 s.dataset.hour,
                 newValue || "",
-                s.dataset.class
+                s.dataset.class,
               );
 
               // 🔧 aggiorna visibilità dei menu
@@ -1743,7 +1744,7 @@
                 i.dataset.absent,
                 i.dataset.hour,
                 val,
-                i.dataset.class
+                i.dataset.class,
               );
               refreshPotVisibilityForHour(i.dataset.hour);
             });
@@ -1792,20 +1793,20 @@
 
             if (response.ok && result.status === "success") {
               showToast(
-                `<i class="bi bi-cloud-check-fill me-2"></i> Riepilogo salvato sul server`
+                `<i class="bi bi-cloud-check-fill me-2"></i> Riepilogo salvato sul server`,
               );
             } else {
               showToast(
                 `<i class="bi bi-cloud-slash-fill me-2"></i> Errore salvataggio: ${
                   result.message || "sconosciuto"
                 }`,
-                "alert-danger"
+                "alert-danger",
               );
             }
           } catch (error) {
             showToast(
               `<i class="bi bi-cloud-slash-fill me-2"></i> Errore rete salvataggio`,
-              "alert-danger"
+              "alert-danger",
             );
           }
         }
@@ -1826,20 +1827,20 @@
 
             if (response.ok && result.status === "success") {
               showToast(
-                `<i class="bi bi-cloud-check-fill me-2"></i> Riepilogo salvato sul server`
+                `<i class="bi bi-cloud-check-fill me-2"></i> Riepilogo salvato sul server`,
               );
             } else {
               showToast(
                 `<i class="bi bi-cloud-slash-fill me-2"></i> Errore salvataggio: ${
                   result.message || "sconosciuto"
                 }`,
-                "alert-danger"
+                "alert-danger",
               );
             }
           } catch (error) {
             showToast(
               `<i class="bi bi-cloud-slash-fill me-2"></i> Errore rete salvataggio`,
-              "alert-danger"
+              "alert-danger",
             );
           }
         }
@@ -1858,7 +1859,7 @@
 
             const parentTd = cell.closest("td");
             const colIndex = Array.from(parentTd.parentNode.children).indexOf(
-              parentTd
+              parentTd,
             );
 
             const hour =
@@ -1878,12 +1879,12 @@
             }
 
             const summaryRow = document.querySelector(
-              `#summary-grid tbody tr[data-absent="${CSS.escape(docente)}"]`
+              `#summary-grid tbody tr[data-absent="${CSS.escape(docente)}"]`,
             );
 
             if (summaryRow) {
               const summaryCell = summaryRow.querySelector(
-                `td[data-hour="${hour}"]`
+                `td[data-hour="${hour}"]`,
               );
 
               if (summaryCell) {
@@ -1920,7 +1921,7 @@
           if (!summaryTable) {
             showToast(
               `<i class="bi bi-exclamation-triangle-fill me-2"></i> Nessuna tabella di riepilogo trovata.`,
-              "alert-danger"
+              "alert-danger",
             );
             return;
           }
@@ -1995,7 +1996,7 @@
               // full diventa:
               //   "In compresenza (NOME) (CLASSE)"
               const compParts = full.match(
-                /^In compresenza\s*(\([^)]+\))?\s*(\([^)]+\))?$/i
+                /^In compresenza\s*(\([^)]+\))?\s*(\([^)]+\))?$/i,
               );
 
               if (compParts) {
@@ -2073,7 +2074,7 @@
 
           // Assenti orari (tabella riepilogo)
           const summaryRows = document.querySelectorAll(
-            "#summary-grid tbody tr"
+            "#summary-grid tbody tr",
           );
           summaryRows.forEach((tr) => {
             const docenteAssente =
@@ -2120,13 +2121,13 @@
             await uploadCsvToServer(csvContent, csvFilename, remotePath);
             showToast(
               `<i class="bi bi-file-earmark-pdf-fill me-2"></i> PDF scaricato e riepilogo salvato con successo.`,
-              "alert-success"
+              "alert-success",
             );
           } catch (err) {
             console.error("Errore nel salvataggio CSV remoto:", err);
             showToast(
               `<i class="bi bi-exclamation-triangle-fill me-2"></i> PDF generato, ma errore nel salvataggio remoto.`,
-              "alert-warning"
+              "alert-warning",
             );
           }
         }
@@ -2161,7 +2162,7 @@
           if (!exists) {
             console.log(
               "[RESTORE] Nessun CSV di ripristino trovato:",
-              urlSostituzioni
+              urlSostituzioni,
             );
             return;
           }
@@ -2198,7 +2199,7 @@
           document.body.insertAdjacentHTML("beforeend", modalHtml);
 
           const restoreModal = new bootstrap.Modal(
-            document.getElementById("restoreModal")
+            document.getElementById("restoreModal"),
           );
           restoreModal.show();
 
@@ -2240,7 +2241,7 @@
             // log intestazione + prime righe
             console.log(
               "[RESTORE] Righe totali (incl. intestazione):",
-              lines.length
+              lines.length,
             );
             if (lines.length > 0)
               console.log("[RESTORE] Intestazione CSV:", lines[0]);
@@ -2257,7 +2258,7 @@
 
               // parsing CSV “tollerante” a virgole e virgolette
               const parts = line.match(
-                /(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|([^\",]+))/g
+                /(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|([^\",]+))/g,
               );
               if (!parts) {
                 console.warn(`[RESTORE] Riga ${i} non parsabile, salto:`, line);
@@ -2269,13 +2270,13 @@
                   .replace(/^"|"$/g, "")
                   .replace(/""/g, '"')
                   .replace(/\r/g, "")
-                  .trim()
+                  .trim(),
               );
 
               if (vals.length !== 5) {
                 console.warn(
                   `[RESTORE] Riga ${i} con ${vals.length} campi (attesi 5), salto:`,
-                  vals
+                  vals,
                 );
                 continue;
               }
@@ -2295,7 +2296,7 @@
               if (tipo === "ASSENZA_GIORNALIERA" || ora === "GIORNALIERO") {
                 tmpDaily.add(docente);
                 console.log(
-                  `[RESTORE] Marcato come assente giornaliero: ${docente}`
+                  `[RESTORE] Marcato come assente giornaliero: ${docente}`,
                 );
 
                 // ✅ Cerca anche eventuali righe successive dello stesso docente
@@ -2303,19 +2304,19 @@
                 const relatedRows = lines
                   .slice(i + 1)
                   .map((l) =>
-                    l.match(/(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|([^\",]+))/g)
+                    l.match(/(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|([^\",]+))/g),
                   )
                   .filter(Boolean)
                   .map((arr) =>
                     arr.map((v) =>
-                      v.replace(/^"|"$/g, "").replace(/""/g, '"').trim()
-                    )
+                      v.replace(/^"|"$/g, "").replace(/""/g, '"').trim(),
+                    ),
                   )
                   .filter(
                     (v) =>
                       v[0] === docente &&
                       HOURS.includes(v[1]) &&
-                      v[4] !== "ASSENZA_GIORNALIERA"
+                      v[4] !== "ASSENZA_GIORNALIERA",
                   );
 
                 // Se non ci sono righe specifiche, crea placeholder per tutte le ore
@@ -2341,9 +2342,9 @@
                         Tipo: tipoRel || "SOSTITUZIONE",
                       });
                       console.log(
-                        `[RESTORE] Aggiunta sostituzione per ${doc} @ ${oraRel}: ${sostRel}`
+                        `[RESTORE] Aggiunta sostituzione per ${doc} @ ${oraRel}: ${sostRel}`,
                       );
-                    }
+                    },
                   );
                 }
               }
@@ -2356,14 +2357,14 @@
               // Se il docente è già marcato come assente giornaliero, non aggiungerlo mai alle orarie
               if (tmpDaily.has(docente)) {
                 console.log(
-                  `[RESTORE] ${docente} è già assente giornaliero → salto righe orarie`
+                  `[RESTORE] ${docente} è già assente giornaliero → salto righe orarie`,
                 );
                 continue;
               }
 
               if (!HOURS.includes(ora)) {
                 console.warn(
-                  `[RESTORE] Ora non valida o non in HOURS (${ora}). Riga ${i} scartata.`
+                  `[RESTORE] Ora non valida o non in HOURS (${ora}). Riga ${i} scartata.`,
                 );
                 continue;
               }
@@ -2384,11 +2385,11 @@
             // 4) LOG riepilogo parsing
             console.log(
               "[RESTORE] Assenti giornalieri ripristinati:",
-              Array.from(tmpDaily)
+              Array.from(tmpDaily),
             );
             console.log(
               "[RESTORE] Assenti orari ripristinati:",
-              [...tmpHourly.entries()].map(([k, v]) => [k, [...v]])
+              [...tmpHourly.entries()].map(([k, v]) => [k, [...v]]),
             );
             console.log("[RESTORE] Scelte ripristinate (keys):", [
               ...restoredChoices.keys(),
@@ -2414,7 +2415,7 @@
               const allowed =
                 getTeacherHoursOnDate(teacher, selectedDate) || [];
               const validHours = [...hoursSet].filter((h) =>
-                allowed.includes(h)
+                allowed.includes(h),
               );
               if (!validHours.length) return;
 
@@ -2443,8 +2444,8 @@
               const [doc, h] = key.split("|");
               const cell = document.querySelector(
                 `.table tbody tr td[data-hour="${h}"][data-absent="${CSS.escape(
-                  doc
-                )}"]`
+                  doc,
+                )}"]`,
               );
               console.log(`[RESTORE][UI] cella ${doc} @ ${h}:`, {
                 trovata: !!cell,
@@ -2453,7 +2454,7 @@
             });
 
             showToast(
-              `<i class="bi bi-arrow-counterclockwise me-2"></i> Ripristino completato`
+              `<i class="bi bi-arrow-counterclockwise me-2"></i> Ripristino completato`,
             );
 
             wasRestoredFromCSV = true;
@@ -2461,14 +2462,14 @@
             console.error("[RESTORE] Errore durante il ripristino:", e);
             showToast(
               `<i class="bi bi-exclamation-octagon-fill me-2"></i> Errore nel ripristino`,
-              "alert-danger"
+              "alert-danger",
             );
           }
         }
 
         function refillHourlyUIFromRestoredHourly(
           restoredHourly,
-          selectedDate
+          selectedDate,
         ) {
           if (!hourlyGridEl) return;
 
@@ -2580,7 +2581,7 @@
             console.error("[EXPORT] Errore durante l’esportazione:", err);
             window.showToast(
               `<i class="bi bi-exclamation-triangle-fill me-2"></i> Errore durante la generazione del PDF.`,
-              "alert-danger"
+              "alert-danger",
             );
           }
           return;
@@ -2657,7 +2658,7 @@
               console.error("[EXPORT] Errore durante l’esportazione:", err);
               window.showToast(
                 `<i class="bi bi-exclamation-triangle-fill me-2"></i> Errore durante la generazione del PDF.`,
-                "alert-danger"
+                "alert-danger",
               );
             }
           });
